@@ -25,35 +25,32 @@ ifneq ($(CONFIG_PACKAGE_odhcp6c_ext_prefix_class),0)
   CMAKE_OPTIONS += -DEXT_PREFIX_CLASS=$(CONFIG_PACKAGE_odhcp6c_ext_prefix_class)
 endif
 
-ifneq ($(CONFIG_PACKAGE_odhcp6c_ext_cer_id),0)
-  CMAKE_OPTIONS += -DEXT_CER_ID=$(CONFIG_PACKAGE_odhcp6c_ext_cer_id)
+ifneq ($(CONFIG_PACKAGE_odhcp6c-terastream_ext_cer_id),0)
+  CMAKE_OPTIONS += -DEXT_CER_ID=$(CONFIG_PACKAGE_odhcp6c-terastream_ext_cer_id)
 endif
 
-define Package/odhcp6c
+define Package/odhcp6c-terastream
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Embedded DHCPv6-client for OpenWrt, Terastream fork
   DEPENDS:=+kmod-ipv6 -odhcp6c
 endef
 
-define Package/odhcp6c/config
-  config PACKAGE_odhcp6c_ext_prefix_class
+define Package/odhcp6c-terastream/config
+  config PACKAGE_odhcp6c-terastream_ext_prefix_class
     int "Prefix Class Extension ID (0 = disabled)"
-    depends on PACKAGE_odhcp6c
+    depends on PACKAGE_odhcp6c-terastream
     default 0
 
-  config PACKAGE_odhcp6c_ext_cer_id
+  config PACKAGE_odhcp6c-terastream_ext_cer_id
     int "CER-ID Extension ID (0 = disabled)"
-    depends on PACKAGE_odhcp6c
+    depends on PACKAGE_odhcp6c-terastream
     default 0
 endef
 
-define Package/odhcp6c/install
+define Package/odhcp6c-terastream/install
 	$(INSTALL_DIR) $(1)/usr/sbin/
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/odhcp6c $(1)/usr/sbin/
-	$(INSTALL_DIR) $(1)/lib/netifd/proto
-	$(INSTALL_BIN) ./files/dhcpv6.sh $(1)/lib/netifd/proto/dhcpv6.sh
-	$(INSTALL_BIN) ./files/dhcpv6.script $(1)/lib/netifd/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/odhcp6c $(1)/usr/sbin/odhcp6c-terastream
 endef
 
-$(eval $(call BuildPackage,odhcp6c))
+$(eval $(call BuildPackage,odhcp6c-terastream))
