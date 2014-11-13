@@ -46,7 +46,7 @@ proto_dhcp6_terastream_setup() {
 	[ "$reqopts" ] && append opts "-r $reqopts"
 
 	proto_export "INTERFACE=$config"
-	proto_run_command "$config" odhcp6c \
+	proto_run_command "$config" odhcp6c-terastream \
 		$opts \
 		-R \
 		-t 120 \
