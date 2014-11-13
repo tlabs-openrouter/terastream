@@ -1,0 +1,262 @@
+From b02361cba2992b5a5d32c95a6adc3308b23f2138 Mon Sep 17 00:00:00 2001
+From: Leonardo Jelenkovic <leonardo.jelenkovic@gmail.com>
+Date: Sat, 15 Mar 2014 13:33:39 +0100
+Subject: [PATCH 11/17] iter4b (misc)
+
+---
+ networking/udhcp/Config.src |  2 +-
+ networking/udhcp/d6_dhcpc.c |  1 -
+ networking/udhcp/dhcp4o6.c  | 88 ++++++++++++---------------------------------
+ networking/udhcp/dhcp4o6.h  |  1 +
+ networking/udhcp/dhcpc.c    | 27 +++++++-------
+ 5 files changed, 38 insertions(+), 81 deletions(-)
+
+diff --git a/networking/udhcp/Config.src b/networking/udhcp/Config.src
+index c7002e9..b8a1412 100644
+--- a/networking/udhcp/Config.src
++++ b/networking/udhcp/Config.src
+@@ -154,7 +154,7 @@ config UDHCPC_SLACK_FOR_BUGGY_SERVERS
+ 	  Seednet (ISP) VDSL: sends packets 2 bytes too large.
+ 
+ config FEATURE_DHCP4o6C
+-	bool "Use DHCPv4 over DHCPv6"
++	bool "Use DHCPv4 over DHCPv6 (client only)"
+ 	default y
+ 	depends on UDHCPC
+ 	help
+diff --git a/networking/udhcp/d6_dhcpc.c b/networking/udhcp/d6_dhcpc.c
+index 6bbfe71..044f046 100644
+--- a/networking/udhcp/d6_dhcpc.c
++++ b/networking/udhcp/d6_dhcpc.c
+@@ -639,7 +639,6 @@ static NOINLINE int d6_recv_raw_packet(struct in6_addr *peer_ipv6
+ 
+ 	bytes -= sizeof(packet.ip6) + sizeof(packet.udp);
+ 	memcpy(d6_pkt, &packet.data, bytes);
+-
+ 	return bytes;
+ }
+ 
+diff --git a/networking/udhcp/dhcp4o6.c b/networking/udhcp/dhcp4o6.c
+index bb585b5..42ef51c 100644
+--- a/networking/udhcp/dhcp4o6.c
++++ b/networking/udhcp/dhcp4o6.c
+@@ -22,11 +22,9 @@
+ #include <linux/filter.h>
+ 
+ 
+-/*** Utility functions borrowed from d6_dhcpc.c ***/
++/*** Utility functions borrowed from d6_dhcpc.c (and adapted if required) ***/
+ static void *d6_find_option(uint8_t *option, uint8_t *option_end, unsigned code);
+-//static void *d6_store_blob(void *dst, const void *src, unsigned len);
+ static uint8_t *init_d6_packet(struct d6_packet *packet, char type, uint32_t xid);
+-//static uint8_t *add_d6_client_options(uint8_t *ptr);
+ static NOINLINE int d6_recv_raw_packet(struct d6_packet *d6_pkt, int fd);
+ static int d6_raw_socket(int ifindex);
+ 
+@@ -84,23 +82,6 @@ static uint8_t *init_d6_packet(struct d6_packet *packet, char type, uint32_t xid
+ 	return (void *) packet->d6_options;
+ }
+ 
+-#if 0
+-static uint8_t *add_d6_client_options(uint8_t *ptr)
+-{
+-	return ptr;
+-	//uint8_t c;
+-	//int i, end, len;
+-
+-	/* Add a "param req" option with the list of options we'd like to have
+-	 * from stubborn DHCP servers. Pull the data from the struct in common.c.
+-	 * No bounds checking because it goes towards the head of the packet. */
+-	//...
+-
+-	/* Add -x options if any */
+-	//...
+-}
+-#endif
+-
+ /* Returns -1 on errors that are fatal for the socket, -2 for those that aren't */
+ /* NOINLINE: limit stack usage in caller */
+ static NOINLINE int d6_recv_raw_packet(struct d6_packet *d6_pkt, int fd)
+@@ -158,9 +139,16 @@ static NOINLINE int d6_recv_raw_packet(struct d6_packet *d6_pkt, int fd)
+ 	bytes -= sizeof(packet.ip6) + sizeof(packet.udp);
+ 	memcpy(d6_pkt, &packet.data, bytes);
+ 
+-	/* save DHCPv6 server address, for possible future usage by client */
+-	//dhcp4o6_data.dst_ip = packet.ip6.ip6_src;
+-	/* FIXME is this required? */
++// Save DHCPv6 server address?
++//	Server address should be given at command line. If its not we use
++//	multicast on FF02__1_2. However, when server replies with *valid* reply
++//	we should use its address in future communication (not multicast).
++//	For example, we could define local variable "last_peer_ipv6", set its
++//	value here:
++//	last_peer_ipv6 = packet.ip6.ip6_src;
++//	validate received packet (in dhcp4o6_get_dhcpv4_from_dhcpv6?),
++//	and if its OK and dhcp4o6_data.dst_ip is multicast use last_peer_ipv6
++//	(dhcp4o6_data.dst_ip = last_peer_ipv6)
+ 
+ 	return bytes;
+ }
+@@ -273,7 +261,6 @@ static int d6_raw_socket(int ifindex)
+ /*** DHCP4o6 utility functions ***/
+ 
+ /* init dhcp4o6 data structure */
+-
+ int dhcp4o6_init (int port, char *cip6, char *sip6)
+ {
+ 	struct in6_addr ip6;
+@@ -290,19 +277,27 @@ int dhcp4o6_init (int port, char *cip6, char *sip6)
+ 		dhcp4o6_data.dst_port = 547;
+ 	}
+ 
+-	if (cip6 && inet_pton(AF_INET6, cip6, &ip6) > 0)
+-		dhcp4o6_data.src_ip = ip6;
++	if (!cip6 || inet_pton(AF_INET6, cip6, &ip6) != 1) {
++		bb_error_msg("Valid local (client) IPv6 address must be provided!");
++		exit(1);
++	}
++	dhcp4o6_data.src_ip = ip6;
+ 
+ 	if (sip6 && inet_pton(AF_INET6, sip6, &ip6) > 0) {
+ 		dhcp4o6_data.dst_ip = ip6;
+ 	}
+-	else {
++	else if (strcmp(sip6, "mcast") == 0) {
+ 		/* server address = multicast address = FF02__1_2 */
+ 		dhcp4o6_data.dst_ip.s6_addr[0] = 0xFF;
+ 		dhcp4o6_data.dst_ip.s6_addr[1] = 0x02;
+ 		dhcp4o6_data.dst_ip.s6_addr[13] = 0x01;
+ 		dhcp4o6_data.dst_ip.s6_addr[15] = 0x02;
+ 	}
++	else {
++		bb_error_msg("Valid DHCP4oDHCP6 server IPv6 address must be "
++		"provided, or multicast specified by 'mcast' instead!");
++		exit(1);
++	}
+ 
+ 	//FIXME choose between SOCKET_RAW and SOCKET_KERNEL with additional flag!
+ //	dhcp4o6_data.socket_mode = SOCKET_RAW;
+@@ -427,42 +422,3 @@ int dhcp4o6_send_packet (struct dhcp_packet *packet4, int bcast )
+ 		return -1;
+ 	}
+ }
+-
+-#if 0 /* TODO to get local ipv6 address "automatically", now its just a copy from man page */
+-
+-#include <sys/types.h>
+-#include <ifaddrs.h>
+-
+-static int dhcp4o6_get_client_addr (void)
+-{
+-	struct ifaddrs *ifaddr, *ifa;
+-	char host[NI_MAXHOST];
+-	int s;
+-
+-	if (getifaddrs(&ifaddr) == -1) {
+-		log1("getifaddrs failure");
+-		return -1;
+-	}
+-
+-	for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+-		if (
+-			ifa->ifa_addr == NULL ||
+-			strcmp ( client_config.interface, ifa->ifa_name ) != 0 ||
+-			ifa->ifa_addr->sa_family != AF_INET6
+-		)
+-			continue;
+-
+-		s = getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in6),
+-                        host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+-                if (s != 0)
+-			continue;
+-
+-		log1("\taddress: <%s>\n", host);
+-
+-	}
+-
+-	freeifaddrs(ifaddr);
+-
+-	return 0;
+-}
+-#endif
+diff --git a/networking/udhcp/dhcp4o6.h b/networking/udhcp/dhcp4o6.h
+index adc53fc..6984b3f 100644
+--- a/networking/udhcp/dhcp4o6.h
++++ b/networking/udhcp/dhcp4o6.h
+@@ -44,6 +44,7 @@ struct dhcp4o6_data_t {
+ 	unsigned socket_mode; /* SOCKET_RAW, SOCKET_KERNEL */
+ };
+ 
++/* dhcp4o6_data is placed at the end of bb_common_bufsiz1 */
+ #define dhcp4o6_data (*(struct dhcp4o6_data_t*)(&bb_common_bufsiz1[COMMON_BUFSIZE - sizeof(struct dhcp4o6_data_t)]))
+ 
+ 
+diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
+index 456693f..b108c93 100644
+--- a/networking/udhcp/dhcpc.c
++++ b/networking/udhcp/dhcpc.c
+@@ -674,10 +674,10 @@ static int raw_bcast_from_client_config_ifindex(struct dhcp_packet *packet)
+ #if ENABLE_FEATURE_DHCP4o6C
+ 	if ( !client_config.mode4o6 )
+ #endif
+-		return udhcp_send_raw_packet(packet,
+-			/*src*/ INADDR_ANY, CLIENT_PORT,
+-			/*dst*/ INADDR_BROADCAST, SERVER_PORT, MAC_BCAST_ADDR,
+-			client_config.ifindex);
++	return udhcp_send_raw_packet(packet,
++		/*src*/ INADDR_ANY, CLIENT_PORT,
++		/*dst*/ INADDR_BROADCAST, SERVER_PORT, MAC_BCAST_ADDR,
++		client_config.ifindex);
+ #if ENABLE_FEATURE_DHCP4o6C
+ 	else
+ 		return dhcp4o6_send_packet (packet, 1);
+@@ -691,9 +691,9 @@ static int bcast_or_ucast(struct dhcp_packet *packet, uint32_t ciaddr, uint32_t
+ 	{
+ 		if ( !client_config.mode4o6 )
+ #endif
+-			return udhcp_send_kernel_packet(packet,
+-				ciaddr, CLIENT_PORT,
+-				server, SERVER_PORT);
++		return udhcp_send_kernel_packet(packet,
++			ciaddr, CLIENT_PORT,
++			server, SERVER_PORT);
+ #if ENABLE_FEATURE_DHCP4o6C
+ 		else
+ 			return dhcp4o6_send_packet(packet, 0);
+@@ -1202,8 +1202,9 @@ static void client_background(void)
+ //usage:     "\n	-b,--background		Background if lease is not obtained"
+ //usage:	)
+ //usage:	IF_FEATURE_DHCP4o6C(
+-//usage:     "\n	-6 sIPv6		Use DHCP4o6 mode and given DHCP4o6 server"
+-//usage:     "\n	-I cIPv6		Client IPv6 address to use for DHCPv4o6"
++//usage:     "\n	-6,--dhcp4o6 SIP	Use DHCP4-over-DHCP6 mode with given"
++//usage:     "\n				server IPv6 address (or 'mcast' for multicast)"
++//usage:     "\n	-I,--client-ipv6 CIP	Client IPv6 address (for DHCP4-over-DHCP6 mode)"
+ //usage:	)
+ //usage:     "\n	-S,--syslog		Log to syslog too"
+ //usage:	IF_FEATURE_UDHCPC_ARPING(
+@@ -1244,8 +1245,9 @@ static void client_background(void)
+ //usage:	)
+ //usage:     "\n	-S		Log to syslog too"
+ //usage:	IF_FEATURE_DHCP4o6C(
+-//usage:     "\n	-6 sIPv6		Use DHCP4o6 mode and given DHCP4o6 server"
+-//usage:     "\n	-I cIPv6		Client IPv6 address to use for DHCPv4o6"
++//usage:     "\n	-6,--dhcp4o6 SIP	Use DHCP4-over-DHCP6 mode with given"
++//usage:     "\n				server IPv6 address (or 'mcast' for multicast)"
++//usage:     "\n	-I,--client-ipv6 CIP	Client IPv6 address (for DHCP4-over-DHCP6 mode)"
+ //usage:	)
+ //usage:	IF_FEATURE_UDHCPC_ARPING(
+ //usage:     "\n	-a		Use arping to validate offered address"
+@@ -1309,8 +1311,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 		USE_FOR_MMU("b")
+ 		IF_FEATURE_UDHCPC_ARPING("a")
+ 		IF_FEATURE_UDHCP_PORT("P:")
+-		IF_FEATURE_DHCP4o6C("6:")
+-		IF_FEATURE_DHCP4o6C("I:")
++		IF_FEATURE_DHCP4o6C("6:I:")
+ 		"v"
+ 		, &str_V, &str_h, &str_h, &str_F
+ 		, &client_config.interface, &client_config.pidfile, &str_r /* i,p */
+-- 
+2.0.1
+

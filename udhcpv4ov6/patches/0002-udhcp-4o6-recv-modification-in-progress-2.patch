@@ -1,0 +1,163 @@
+From b3d4007c9b7720ed2baa62de4fe9842833c42b5d Mon Sep 17 00:00:00 2001
+From: Leonardo Jelenkovic <leonardo.jelenkovic@gmail.com>
+Date: Fri, 28 Feb 2014 00:17:34 +0100
+Subject: [PATCH 02/17] udhcp 4o6 recv modification in progress (2)
+
+---
+ networking/udhcp/d6_dhcpc.c | 50 ++++++++++++++++++++++++++++++++++++++++++---
+ networking/udhcp/dhcpc.c    | 25 ++++++++++++++++++++++-
+ networking/udhcp/dhcpc.h    |  3 ++-
+ 3 files changed, 73 insertions(+), 5 deletions(-)
+
+diff --git a/networking/udhcp/d6_dhcpc.c b/networking/udhcp/d6_dhcpc.c
+index 99ffbd0..02eeb4f 100644
+--- a/networking/udhcp/d6_dhcpc.c
++++ b/networking/udhcp/d6_dhcpc.c
+@@ -1524,7 +1524,7 @@ int udhcpc6_main(int argc UNUSED_PARAM, char **argv)
+  * so code is placed here and not in dhcpc.c.
+  */
+ 
+-int get_dhcpv4_from_dhcpv6(struct d6_packet *d6_pkt, struct dhcp_packet *d4_pkt)
++int dhcp4o6_get_dhcpv4_from_dhcpv6(struct d6_packet *d6_pkt, struct dhcp_packet *d4_pkt)
+ {
+ 	uint8_t *d6opt;
+ 	unsigned opt_len;
+@@ -1545,8 +1545,7 @@ int get_dhcpv4_from_dhcpv6(struct d6_packet *d6_pkt, struct dhcp_packet *d4_pkt)
+ 	}
+ 
+ 	opt_len = d6opt[2]<<8 + d6opt[3];
+-	if ( opt_len < sizeof (struct dhcp_packet) -
+-		DHCP_OPTIONS_BUFSIZE - CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS ) {
++	if ( opt_len < DHCP_SIZE ) {
+ 		log1("D6_OPT_DHCPV4_MSG option too small");
+ 		return -1;
+ 	}
+@@ -1580,4 +1579,49 @@ int dhcp4o6_recv_raw_packet (struct in6_addr *peer_ipv6
+ 	return d6_recv_raw_packet(peer_ipv6,&d6_pkt,sockfd);
+ }
+ 
++int dhcp4o6_send_raw_packet (struct dhcp_packet *dhcp_pkt,
++		uint32_t source_nip, int source_port,
++		uint32_t dest_nip, int dest_port, const uint8_t *dest_arp,
++		int ifindex)
++{
++	struct d6_packet packet;
++	struct d6_option *opt;
++	uint8_t *opt8;
++	uint size;
++
++	if ( client_config.xid6 == 0 )
++		client_config.xid6 = random_xid();
++
++	/* create DHCPv6 packet of type D6_MSG_DHCPV4_QUERY */
++	opt8 = opt = init_d6_packet ( &packet, D6_OPT_DHCPV4_MSG, client_config.xid6 );
++
++	//to be continued... (tommorrow; ops later today)
++
++
++
++}
++int dhcp4o6_send_kernel_packet (struct dhcp_packet *dhcp_pkt,
++		uint32_t source_nip, int source_port,
++		uint32_t dest_nip, int dest_port)
++{
++	/* FIXME? */
++	return dhcp4o6_send_raw_packet(dhcp_pkt,
++			source_nip, source_port,
++			dest_nip, dest_port,
++			MAC_BCAST_ADDR, client_config.ifindex);
++}
++
+ #endif
++
++static uint8_t *init_d6_packet(struct d6_packet *packet, char type, uint32_t xid)
++{
++	struct d6_option *clientid;
++
++	memset(packet, 0, sizeof(*packet));
++
++	packet->d6_xid32 = xid;
++	packet->d6_msg_type = type;
++
++	clientid = (void*)client_config.clientid;
++	return d6_store_blob(packet->d6_options, clientid, clientid->len + 2+2);
++}
+diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
+index 4634b88..59a7569 100644
+--- a/networking/udhcp/dhcpc.c
++++ b/networking/udhcp/dhcpc.c
+@@ -664,18 +664,39 @@ static void add_client_options(struct dhcp_packet *packet)
+ 
+ static int raw_bcast_from_client_config_ifindex(struct dhcp_packet *packet)
+ {
++#if ENABLE_FEATURE_DHCP4o6C
++	if ( !client_config.mode4o6 )
++#endif
+ 	return udhcp_send_raw_packet(packet,
+ 		/*src*/ INADDR_ANY, CLIENT_PORT,
+ 		/*dst*/ INADDR_BROADCAST, SERVER_PORT, MAC_BCAST_ADDR,
+ 		client_config.ifindex);
++#if ENABLE_FEATURE_DHCP4o6C
++	else
++	return dhcp4o6_send_raw_packet(packet,
++		/*src*/ INADDR_ANY, CLIENT_PORT6,
++		/*dst*/ INADDR_BROADCAST, SERVER_PORT6, MAC_BCAST_ADDR,
++		client_config.ifindex);
++#endif
+ }
+ 
+ static int bcast_or_ucast(struct dhcp_packet *packet, uint32_t ciaddr, uint32_t server)
+ {
+ 	if (server)
++#if ENABLE_FEATURE_DHCP4o6C
++	{
++		if ( !client_config.mode4o6 )
++#endif
+ 		return udhcp_send_kernel_packet(packet,
+ 			ciaddr, CLIENT_PORT,
+ 			server, SERVER_PORT);
++#if ENABLE_FEATURE_DHCP4o6C
++		else
++		return dhcp4o6_send_kernel_packet(packet,
++			ciaddr, CLIENT_PORT,
++			server, SERVER_PORT);
++	}
++#endif
+ 	return raw_bcast_from_client_config_ifindex(packet);
+ }
+ 
+@@ -1310,6 +1331,8 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 
+ #if ENABLE_FEATURE_DHCP4o6C
+ 	client_config.mode4o6 = (opt & OPT_6);
++	if ( client_config.mode4o6 )
++		client_config.xid6 = 0;
+ #endif
+ 
+ 	if (opt & OPT_r)
+@@ -1648,7 +1671,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 
+ #if ENABLE_FEATURE_DHCP4o6C
+ 		if ( client_config.mode4o6 ) {
+-			if ( get_dhcpv4_from_dhcpv6 (&d6_pkt, &packet) ) {
++			if ( dhcp4o6_get_dhcpv4_from_dhcpv6 (&d6_pkt, &packet) ) {
+ 				log1("Ignoring inadequate packet");
+ 				continue;
+ 			}
+diff --git a/networking/udhcp/dhcpc.h b/networking/udhcp/dhcpc.h
+index f398bff..503fb99 100644
+--- a/networking/udhcp/dhcpc.h
++++ b/networking/udhcp/dhcpc.h
+@@ -21,7 +21,8 @@ struct client_config_t {
+ 	uint8_t *hostname;              /* Optional hostname to use */
+ 	uint8_t *fqdn;                  /* Optional fully qualified domain name to use */
+ 
+-	IF_FEATURE_DHCP4o6C(int mode4o6; /* Compile DHCPv4 over DHCPv6 */)
++	IF_FEATURE_DHCP4o6C(int mode4o6; /* DHCPv4 over DHCPv6 mode */)
++	IF_FEATURE_DHCP4o6C(uint32_t xid6; /* DHCPv6 clinet xid */)
+ 
+ 	uint16_t first_secs;
+ 	uint16_t last_secs;
+-- 
+2.0.1
+

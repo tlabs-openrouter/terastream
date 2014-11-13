@@ -1,0 +1,24 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2013 T-Labs
+# Copyright (C) 2013 Kaspar Schleiser <kaspar@schleiser.de>
+
+# start before dnsmasq (60)
+START=59
+
+boot() {
+	local dnsmasq_conffile=/tmp/dnsmasq.d/10-ip6-prefix.conf
+	mkdir -p $(dirname $dnsmasq_conffile)
+	echo "dhcp-range=::1,constructor:br-lan,ra-stateless" > $dnsmasq_conffile
+	echo "ra-param=br-lan,15" >> $dnsmasq_conffile
+	
+	iptv_if="$(uci -q get network.lan_iptv.ifname)"
+	[ -n "$iptv_if" ] && {
+		echo "dhcp-range=::1,constructor:${iptv_if},ra-stateless" >> $dnsmasq_conffile
+		echo "ra-param=${iptv_if},15" >> $dnsmasq_conffile
+	}
+
+	# choose ula address for DNS address in both RS and DHCP
+	echo "dhcp-option=option6:dns-server,[fd00::]" >> $dnsmasq_conffile
+
+	echo "quiet-ra" >> $dnsmasq_conffile
+}

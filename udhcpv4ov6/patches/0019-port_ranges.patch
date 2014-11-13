@@ -1,0 +1,20 @@
+--- a/networking/udhcp/common.c
++++ b/networking/udhcp/common.c
+@@ -64,6 +64,8 @@
+ #endif
+ 	{ OPTION_STRING                           , 0xd1 }, /* DHCP_PXE_CONF_FILE */
+ 	{ OPTION_6RD                              , 0xd4 }, /* DHCP_6RD           */
++	{ OPTION_U16                              , 0xf0 }, /* DHCP_PORT_RANGE_MIN */
++	{ OPTION_U16                              , 0xf1 }, /* DHCP_PORT_RANGE_MAX */
+ 	{ OPTION_STATIC_ROUTES | OPTION_LIST      , 0xf9 }, /* DHCP_MS_STATIC_ROUTES */
+ 	{ OPTION_STRING                           , 0xfc }, /* DHCP_WPAD          */
+ 
+@@ -131,6 +133,8 @@
+ #endif
+ 	"pxeconffile" "\0" /* DHCP_PXE_CONF_FILE  */
+ 	"ip6rd" "\0"       /* DHCP_6RD            */
++	"port_range_min" "\0" /* DHCP_PORT_RANGE_MIN */
++	"port_range_max" "\0" /* DHCP_PORT_RANGE_MAX */
+ 	"msstaticroutes""\0"/* DHCP_MS_STATIC_ROUTES */
+ 	"wpad" "\0"        /* DHCP_WPAD           */
+ 	;

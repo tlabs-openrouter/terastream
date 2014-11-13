@@ -1,0 +1,25 @@
+From 842d41a9c31931d6198410f91e9f3533173a85ca Mon Sep 17 00:00:00 2001
+From: Leonardo Jelenkovic <leonardo.jelenkovic@gmail.com>
+Date: Mon, 3 Mar 2014 23:01:09 +0100
+Subject: [PATCH 08/17] udhcpc4o6: iter3b
+
+---
+ networking/udhcp/dhcp4o6.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/networking/udhcp/dhcp4o6.c b/networking/udhcp/dhcp4o6.c
+index f9fbad1..c41e535 100644
+--- a/networking/udhcp/dhcp4o6.c
++++ b/networking/udhcp/dhcp4o6.c
+@@ -394,7 +394,7 @@ int dhcp4o6_send_packet (struct dhcp_packet *packet4, int bcast )
+ 	if (dhcp4o6_data.socket_mode == SOCKET_RAW)
+ 		return d6_send_raw_packet(
+ 			&packet6, d6size,
+-			/*src*/ NULL, dhcp4o6_data.src_port, /* FIXME: can we get source ipv6? */
++			/*src*/ &dhcp4o6_data.src_ip, dhcp4o6_data.src_port,
+ 			/*dst*/ &dhcp4o6_data.dst_ip, dhcp4o6_data.dst_port,
+ 			MAC_BCAST_ADDR, client_config.ifindex
+ 		);
+-- 
+2.0.1
+

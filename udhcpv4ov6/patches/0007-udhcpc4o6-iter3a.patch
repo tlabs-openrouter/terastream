@@ -1,0 +1,199 @@
+From 514f972f6a592f827a72a0da9d05cde5a4c8f48f Mon Sep 17 00:00:00 2001
+From: Leonardo Jelenkovic <leonardo.jelenkovic@gmail.com>
+Date: Mon, 3 Mar 2014 20:12:29 +0100
+Subject: [PATCH 07/17] udhcpc4o6: iter3a
+
+---
+ networking/udhcp/dhcp4o6.c | 51 ++++++++++++++++++++++++++++++++++++++++------
+ networking/udhcp/dhcp4o6.h |  7 ++++---
+ networking/udhcp/dhcpc.c   | 24 ++++++++++++----------
+ 3 files changed, 62 insertions(+), 20 deletions(-)
+
+diff --git a/networking/udhcp/dhcp4o6.c b/networking/udhcp/dhcp4o6.c
+index 63e7b8d..f9fbad1 100644
+--- a/networking/udhcp/dhcp4o6.c
++++ b/networking/udhcp/dhcp4o6.c
+@@ -256,7 +256,8 @@ static int d6_raw_socket(int ifindex)
+ /*** DHCP4o6 utility functions ***/
+ 
+ /* init dhcp4o6 data structure */
+-int dhcp4o6_init (int port, int server, char *str_6d)
++
++int dhcp4o6_init (int port, char *cip6, char *sip6)
+ {
+ 	struct in6_addr ip6;
+ 
+@@ -272,19 +273,18 @@ int dhcp4o6_init (int port, int server, char *str_6d)
+ 		dhcp4o6_data.dst_port = 547;
+ 	}
+ 
+-	if (server && str_6d && inet_pton(AF_INET6, str_6d, &ip6) > 0) {
++	if (cip6 && inet_pton(AF_INET6, cip6, &ip6) > 0)
++		dhcp4o6_data.src_ip = ip6;
++
++	if (sip6 && inet_pton(AF_INET6, sip6, &ip6) > 0) {
+ 		dhcp4o6_data.dst_ip = ip6;
+ 	}
+ 	else {
+-#if 0	/* this should be activated (by rfc & draft)! */
+-		bb_error_msg_and_die("bad IPv6 address for DHCP4o6 server '%s'", str_6d);
+-#else
+ 		/* server address = multicast address = FF02__1_2 */
+ 		dhcp4o6_data.dst_ip.s6_addr[0] = 0xFF;
+ 		dhcp4o6_data.dst_ip.s6_addr[1] = 0x02;
+ 		dhcp4o6_data.dst_ip.s6_addr[13] = 0x01;
+ 		dhcp4o6_data.dst_ip.s6_addr[15] = 0x02;
+-#endif
+ 	}
+ 
+ 	//FIXME choose between SOCKET_RAW and SOCKET_KERNEL with additional flag!
+@@ -409,3 +409,42 @@ int dhcp4o6_send_packet (struct dhcp_packet *packet4, int bcast )
+ 		return -1;
+ 	}
+ }
++
++#if 0 /* get local ipv6 address */
++
++#include <sys/types.h>
++#include <ifaddrs.h>
++
++static int dhcp4o6_get_client_addr (void)
++{
++	struct ifaddrs *ifaddr, *ifa;
++	char host[NI_MAXHOST];
++	int s;
++
++	if (getifaddrs(&ifaddr) == -1) {
++		log1("getifaddrs failure");
++		return -1;
++	}
++
++	for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
++		if (
++			ifa->ifa_addr == NULL ||
++			strcmp ( client_config.interface, ifa->ifa_name ) != 0 ||
++			ifa->ifa_addr->sa_family != AF_INET6
++		)
++			continue;
++
++		s = getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in6),
++                        host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
++                if (s != 0)
++			continue;
++
++		log1("\taddress: <%s>\n", host);
++
++	}
++
++	freeifaddrs(ifaddr);
++
++	return 0;
++}
++#endif
+diff --git a/networking/udhcp/dhcp4o6.h b/networking/udhcp/dhcp4o6.h
+index 3d8f064..adc53fc 100644
+--- a/networking/udhcp/dhcp4o6.h
++++ b/networking/udhcp/dhcp4o6.h
+@@ -20,8 +20,9 @@ PUSH_AND_SET_FUNCTION_VISIBILITY_TO_HIDDEN
+ #define MODE4o6_KERNEL_MODE  8
+ 
+ /* DHCPv4o6 message types */
+-#define D6_MSG_DHCPV4_QUERY        (D6_MSG_RELAY_REPL+1)
+-#define D6_MSG_DHCPV4_RESPONSE     (D6_MSG_RELAY_REPL+2)
++#define D6_MSG_DHCPV4_QUERY        32
++#define D6_MSG_DHCPV4_RESPONSE     33
++
+ /* DHCPv4o6 option */
+ #define D6_OPT_DHCPV4_MSG          0xfe
+ 
+@@ -46,7 +47,7 @@ struct dhcp4o6_data_t {
+ #define dhcp4o6_data (*(struct dhcp4o6_data_t*)(&bb_common_bufsiz1[COMMON_BUFSIZE - sizeof(struct dhcp4o6_data_t)]))
+ 
+ 
+-int dhcp4o6_init (int port, int server, char *str_6d);
++int dhcp4o6_init (int port, char *cip6, char *sip6);
+ int dhcp4o6_open_socket(int mode UNUSED_PARAM);
+ int dhcp4o6_send_packet (struct dhcp_packet *packet4, int bcast );
+ int dhcp4o6_recv_packet (struct dhcp_packet *packet, int fd);
+diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
+index 6a5feb8..b9a1175 100644
+--- a/networking/udhcp/dhcpc.c
++++ b/networking/udhcp/dhcpc.c
+@@ -60,8 +60,8 @@ static const char udhcpc_longopts[] ALIGN1 =
+ 	"broadcast\0"      No_argument       "B"
+ 	IF_FEATURE_UDHCPC_ARPING("arping\0"	No_argument       "a")
+ 	IF_FEATURE_UDHCP_PORT("client-port\0"	Required_argument "P")
+-	IF_FEATURE_DHCP4o6C("dhcp4o6\0"		No_argument       "6")
+-	IF_FEATURE_DHCP4o6C("4o6-server\0"	Required_argument       "I")
++	IF_FEATURE_DHCP4o6C("dhcp4o6\0"		Required_argument       "6")
++	IF_FEATURE_DHCP4o6C("client-ipv6\0"	Required_argument       "I")
+ 	;
+ #endif
+ /* Must match getopt32 option string order */
+@@ -1202,8 +1202,8 @@ static void client_background(void)
+ //usage:     "\n	-b,--background		Background if lease is not obtained"
+ //usage:	)
+ //usage:	IF_FEATURE_DHCP4o6C(
+-//usage:     "\n	-6		DHCP4o6 mode"
+-//usage:     "\n	-I sIP		DHCP4o6 server IPv6 address"
++//usage:     "\n	-6 sIPv6		Use DHCP4o6 mode and DHCP4o6 server"
++//usage:     "\n	-I cIPv6		Client IPv6 address for DHCPv4o6 usage"
+ //usage:	)
+ //usage:     "\n	-S,--syslog		Log to syslog too"
+ //usage:	IF_FEATURE_UDHCPC_ARPING(
+@@ -1244,8 +1244,8 @@ static void client_background(void)
+ //usage:	)
+ //usage:     "\n	-S		Log to syslog too"
+ //usage:	IF_FEATURE_DHCP4o6C(
+-//usage:     "\n	-6		DHCP4o6 mode"
+-//usage:     "\n	-I sIP		DHCP4o6 server IPv6 address"
++//usage:     "\n	-6 sIPv6		Use DHCP4o6 mode and DHCP4o6 server"
++//usage:     "\n	-I cIPv6		Client IPv6 address for DHCPv4o6 usage"
+ //usage:	)
+ //usage:	IF_FEATURE_UDHCPC_ARPING(
+ //usage:     "\n	-a		Use arping to validate offered address"
+@@ -1276,7 +1276,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 	uint8_t *temp, *message;
+ 	const char *str_V, *str_h, *str_F, *str_r;
+ 	IF_FEATURE_UDHCP_PORT(char *str_P;)
+-	IF_FEATURE_DHCP4o6C(char *str_6d;)
++	IF_FEATURE_DHCP4o6C(char *str_6c, *str_6s;)
+ 	void *clientid_mac_ptr;
+ 	llist_t *list_O = NULL;
+ 	llist_t *list_x = NULL;
+@@ -1309,7 +1309,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 		USE_FOR_MMU("b")
+ 		IF_FEATURE_UDHCPC_ARPING("a")
+ 		IF_FEATURE_UDHCP_PORT("P:")
+-		IF_FEATURE_DHCP4o6C("6")
++		IF_FEATURE_DHCP4o6C("6:")
+ 		IF_FEATURE_DHCP4o6C("I:")
+ 		"v"
+ 		, &str_V, &str_h, &str_h, &str_F
+@@ -1319,7 +1319,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 		, &list_O
+ 		, &list_x
+ 		IF_FEATURE_UDHCP_PORT(, &str_P)
+-		IF_FEATURE_DHCP4o6C(, &str_6d)
++		IF_FEATURE_DHCP4o6C(, &str_6s, &str_6c)
+ 		IF_UDHCP_VERBOSE(, &dhcp_verbose)
+ 	);
+ 	if (opt & (OPT_h|OPT_H)) {
+@@ -1438,10 +1438,12 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ #if ENABLE_FEATURE_DHCP4o6C
+ 	if ( (opt & OPT_6) ) {
+ 		client_config.mode4o6 = 1;
++		if ( !(opt & OPT_I) )
++			str_6c = NULL;
+ #if ENABLE_FEATURE_UDHCP_PORT
+-		dhcp4o6_init ((opt & OPT_P), (opt & OPT_I), str_6d);
++		dhcp4o6_init ((opt & OPT_P), str_6c, str_6s);
+ #else
+-		dhcp4o6_init (0, (opt & OPT_I), str_6d);
++		dhcp4o6_init (0, str_6c, str_6s);
+ #endif
+ 	}
+ #endif
+-- 
+2.0.1
+

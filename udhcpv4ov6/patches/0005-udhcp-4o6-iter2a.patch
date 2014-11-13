@@ -1,0 +1,37 @@
+From 81510ca24e4aa4e616adf98fffe4e74819042f05 Mon Sep 17 00:00:00 2001
+From: Leonardo Jelenkovic <leonardo.jelenkovic@gmail.com>
+Date: Sat, 1 Mar 2014 00:47:13 +0100
+Subject: [PATCH 05/17] udhcp 4o6: iter2a
+
+---
+ networking/udhcp/d6_dhcpc.c | 7 -------
+ 1 file changed, 7 deletions(-)
+
+diff --git a/networking/udhcp/d6_dhcpc.c b/networking/udhcp/d6_dhcpc.c
+index 6cdd18a..6bbfe71 100644
+--- a/networking/udhcp/d6_dhcpc.c
++++ b/networking/udhcp/d6_dhcpc.c
+@@ -640,11 +640,6 @@ static NOINLINE int d6_recv_raw_packet(struct in6_addr *peer_ipv6
+ 	bytes -= sizeof(packet.ip6) + sizeof(packet.udp);
+ 	memcpy(d6_pkt, &packet.data, bytes);
+ 
+-#if ENABLE_FEATURE_DHCP4o6C
+-	/* save DHCPv6 server address, for possible future usage by client */
+-	memcpy ( server_config.dst_ipv6, packet.ip6.ip6_dst.s6_addr, 16 );
+-	/* FIXME is this required? */
+-#endif
+ 	return bytes;
+ }
+ 
+@@ -745,8 +740,6 @@ static int d6_raw_socket(int ifindex)
+ 		if (setsockopt(fd, SOL_SOCKET, SO_ATTACH_FILTER, &filter_prog,
+ 				sizeof(filter_prog)) >= 0)
+ 			log1("Attached filter to raw socket fd %d", fd); // log?
+-		else
+-			log1("Error attaching filter to raw socket fd %d", fd);
+ 	}
+ #endif
+ 
+-- 
+2.0.1
+

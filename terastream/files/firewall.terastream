@@ -1,0 +1,4 @@
+ip6tables -w -N deny_b4
+ip6tables -w -A input_wan_rule -j deny_b4
+ip6tables -w -N deny_lan
+ip6tables -w -A input_wan_rule -j deny_lan

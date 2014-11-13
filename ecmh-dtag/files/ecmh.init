@@ -1,0 +1,40 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2012 OpenWrt.org
+
+START=90
+
+NAME=ecmh
+PROG=/usr/sbin/ecmh
+
+SERVICE_DAEMONIZE=1
+SERVICE_WRITE_PID=1
+SERVICE_NICENESS=-3
+
+ecmh_start() {
+	local section="$1"
+	local upstream
+	local up_dev
+	local downstream
+	local down_dev
+	config_get upstream "${section}" upstream
+	config_get downstream "${section}" downstream
+
+	up_dev=$(uci_get_state network $upstream ifname $upstream)
+	down_dev=$(uci_get_state network $downstream ifname $downstream)
+
+	service_start $PROG -k -f -i $up_dev -d $down_dev
+}
+
+boot() {
+	config_load "${NAME}"
+	config_foreach ecmh_start ecmh
+}
+
+start() {
+	config_load "${NAME}"
+	config_foreach ecmh_start ecmh
+}
+
+stop() {
+	service_stop $PROG
+}
