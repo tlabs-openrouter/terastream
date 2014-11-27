@@ -60,6 +60,7 @@ old_mode=$(uci -q get openrouter.network.mode)
     echo "Unconfiguring profile ${old_mode}..."
     . $PROFILE_DIR/$old_mode
     unsetup_$old_mode
+    uci commit
 }
 
 echo "Configuring profile ${PROFILE}..."
