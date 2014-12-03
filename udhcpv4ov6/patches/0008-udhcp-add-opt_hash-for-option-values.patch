@@ -1,0 +1,1017 @@
+From 2f29214c191c8554540991f2704d62e7840d321c Mon Sep 17 00:00:00 2001
+From: Christian Carstensen <cc@nanl.de>
+Date: Tue, 18 Nov 2014 17:46:09 +0100
+Subject: [PATCH 8/9] udhcp: add opt_hash for option values
+
+* store and retrieve option values in/from a hash
+* includes RFC 3396 long options
+* opthash needs destruction: void opthash_destroy()
+---
+ networking/udhcp/Kbuild.src     |   2 +-
+ networking/udhcp/dhcpc.c        |  58 +--
+ networking/udhcp/options_hash.c | 756 ++++++++++++++++++++++++++++++++++++++++
+ networking/udhcp/options_hash.h |  39 +++
+ 4 files changed, 829 insertions(+), 26 deletions(-)
+ create mode 100644 networking/udhcp/options_hash.c
+ create mode 100644 networking/udhcp/options_hash.h
+
+diff --git a/networking/udhcp/Kbuild.src b/networking/udhcp/Kbuild.src
+index 647356a..04102f2 100644
+--- a/networking/udhcp/Kbuild.src
++++ b/networking/udhcp/Kbuild.src
+@@ -9,7 +9,7 @@ lib-y:=
+ 
+ INSERT
+ 
+-lib-$(CONFIG_UDHCPC)     += common.o packet.o signalpipe.o socket.o
++lib-$(CONFIG_UDHCPC)     += common.o packet.o signalpipe.o socket.o options_hash.o
+ lib-$(CONFIG_UDHCPD)     += common.o packet.o signalpipe.o socket.o
+ 
+ lib-$(CONFIG_UDHCPC)     += dhcpc.o
+diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
+index 91992a3..9bd5f9f 100644
+--- a/networking/udhcp/dhcpc.c
++++ b/networking/udhcp/dhcpc.c
+@@ -24,6 +24,7 @@
+ #include "common.h"
+ #include "dhcpd.h"
+ #include "dhcpc.h"
++#include "options_hash.h"
+ 
+ #if ENABLE_FEATURE_DHCP4o6C
+ #include "dhcp4o6.h"
+@@ -128,6 +129,8 @@ static const uint8_t len_of_option_as_string[] = {
+ 	[OPTION_S32             ] = sizeof("-2147483684 "),
+ };
+ 
++opthash_entry *opthash[OPTHASH_SIZE];
++
+ /* note: ip is a pointer to an IP in network order, possibly misaliged */
+ static int sprint_nip(char *dest, const char *pre, const uint8_t *ip)
+ {
+@@ -421,6 +424,7 @@ static char **fill_envp(struct dhcp_packet *packet)
+ 	char **envp, **curr;
+ 	const char *opt_name;
+ 	uint8_t *temp;
++	uint8_t opt_len;
+ 	uint8_t overload = 0;
+ 
+ #define BITMAP unsigned
+@@ -445,11 +449,9 @@ static char **fill_envp(struct dhcp_packet *packet)
+ 		/* note: do not search for "pad" (0) and "end" (255) options */
+ //TODO: change logic to scan packet _once_
+ 		for (i = 1; i < 255; i++) {
+-			temp = udhcp_get_option(packet, i);
++			temp = opthash_lookup_simple(i, &opt_len);
+ 			if (temp) {
+-				if (i == DHCP_OPTION_OVERLOAD)
+-					overload = *temp;
+-				else if (i == DHCP_SUBNET)
++				if (i == DHCP_SUBNET)
+ 					envc++; /* for $mask */
+ 				envc++;
+ 				/*if (i != DHCP_MESSAGE_TYPE)*/
+@@ -510,7 +512,7 @@ static char **fill_envp(struct dhcp_packet *packet)
+ 		if (!(*found_ptr & found_mask))
+ 			goto next;
+ 		*found_ptr &= ~found_mask; /* leave only unknown options */
+-		temp = udhcp_get_option(packet, code);
++		temp = opthash_lookup_simple(code, &opt_len);
+ 		*curr = xmalloc_optname_optval(temp, &dhcp_optflags[i], opt_name);
+ 		putenv(*curr++);
+ 		if (code == DHCP_SUBNET) {
+@@ -532,16 +534,12 @@ static char **fill_envp(struct dhcp_packet *packet)
+ 			continue;
+ 		}
+ 		if (bitmap & BMASK(i)) {
+-			unsigned len, ofs;
++			unsigned ofs;
+ 
+-			temp = udhcp_get_option(packet, i);
+-			/* udhcp_get_option returns ptr to data portion,
+-			 * need to go back to get len
+-			 */
+-			len = temp[-OPT_DATA + OPT_LEN];
+-			*curr = xmalloc(sizeof("optNNN=") + 1 + len*2);
++			temp = opthash_lookup_simple(i, &opt_len);
++			*curr = xmalloc(sizeof("optNNN=") + 1 + opt_len*2);
+ 			ofs = sprintf(*curr, "opt%u=", i);
+-			*bin2hex(*curr + ofs, (void*) temp, len) = '\0';
++			*bin2hex(*curr + ofs, (void*) temp, opt_len) = '\0';
+ 			putenv(*curr++);
+ 		}
+ 		i++;
+@@ -1303,6 +1301,8 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 	int max_fd;
+ 	int retval;
+ 	fd_set rfds;
++	uint8_t opt_len;
++	int packet_len;
+ 
+ 	/* Default options */
+ 	IF_FEATURE_UDHCP_PORT(SERVER_PORT = 67;)
+@@ -1457,6 +1457,8 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 	timeout = 0;
+ 	already_waited_sec = 0;
+ 
++	opthash_init();
++
+ 	/* Main event loop. select() waits on signal pipe and possibly
+ 	 * on sockfd.
+ 	 * "continue" statements in code below jump to the top of the loop.
+@@ -1661,21 +1663,19 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 			continue; /* no */
+ 
+ 		{
+-			int len;
+-
+ 			/* A packet is ready, read it */
+ #if ENABLE_FEATURE_DHCP4o6C
+ 			if ( client_config.mode4o6 ) {
+-				len = dhcp4o6_recv_packet(&packet, sockfd);
+-				if ( len == 0 )
++				packet_len = dhcp4o6_recv_packet(&packet, sockfd);
++				if ( packet_len == 0 )
+ 					continue;
+ 			} else
+ #endif
+ 			if (listen_mode == LISTEN_KERNEL)
+-				len = udhcp_recv_kernel_packet(&packet, sockfd);
++				packet_len = udhcp_recv_kernel_packet(&packet, sockfd);
+ 			else
+-				len = udhcp_recv_raw_packet(&packet, sockfd);
+-			if (len == -1) {
++				packet_len = udhcp_recv_raw_packet(&packet, sockfd);
++			if (packet_len == -1) {
+ 				/* Error is severe, reopen socket */
+ 				bb_info_msg("Read error: %s, reopening socket", strerror(errno));
+ 				sleep(discover_timeout); /* 3 seconds by default */
+@@ -1685,7 +1685,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 			 * we will go back and wait for next one.
+ 			 * Be sure timeout is properly decreased. */
+ 			already_waited_sec += (unsigned)monotonic_sec() - timestamp_before_wait;
+-			if (len < 0)
++			if (packet_len < 0)
+ 				continue;
+ 		}
+ 
+@@ -1704,7 +1704,14 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 			continue;
+ 		}
+ 
+-		message = udhcp_get_option(&packet, DHCP_MESSAGE_TYPE);
++		opthash_destroy();
++
++		if (udhcp_prepare_opthash(&packet, packet_len) != 0) {
++			bb_error_msg("error preparing options hash");
++			continue;
++		}
++
++		message = opthash_lookup_simple(DHCP_MESSAGE_TYPE, &opt_len);
+ 		if (message == NULL) {
+ 			bb_error_msg("no message type option, ignoring packet");
+ 			continue;
+@@ -1741,7 +1748,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+  * They say ISC DHCP client supports this case.
+  */
+ 				server_addr = 0;
+-				temp = udhcp_get_option(&packet, DHCP_SERVER_ID);
++				temp = opthash_lookup_simple(DHCP_SERVER_ID, &opt_len);
+ 				if (!temp) {
+ 					bb_error_msg("no server ID, using 0.0.0.0");
+ 				} else {
+@@ -1767,7 +1774,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 				struct in_addr temp_addr;
+ 				uint8_t *temp;
+ 
+-				temp = udhcp_get_option(&packet, DHCP_LEASE_TIME);
++				temp = opthash_lookup_simple(DHCP_LEASE_TIME, &opt_len);
+ 				if (!temp) {
+ 					bb_error_msg("no lease time with ACK, using 1 hour lease");
+ 					lease_seconds = 60 * 60;
+@@ -1852,7 +1859,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 					uint32_t svid;
+ 					uint8_t *temp;
+ 
+-					temp = udhcp_get_option(&packet, DHCP_SERVER_ID);
++					temp = opthash_lookup_simple(DHCP_SERVER_ID, &opt_len);
+ 					if (!temp) {
+  non_matching_svid:
+ 						log1("%s with wrong server ID, ignoring packet",
+@@ -1892,5 +1899,6 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+  ret:
+ 	/*if (client_config.pidfile) - remove_pidfile has its own check */
+ 		remove_pidfile(client_config.pidfile);
++	opthash_destroy();
+ 	return retval;
+ }
+diff --git a/networking/udhcp/options_hash.c b/networking/udhcp/options_hash.c
+new file mode 100644
+index 0000000..046b3ff
+--- /dev/null
++++ b/networking/udhcp/options_hash.c
+@@ -0,0 +1,756 @@
++#include "options_hash.h"
++#include "common.h"
++#include <sys/types.h>
++#include <stdint.h>
++#include <stdlib.h>
++#include <string.h>
++
++#include "libbb.h"
++
++#if ENABLE_UNIT_TEST
++
++static uint8_t __testdata_udhcp_options_hash_option_message_type_request[] = {
++	0x35,
++	0x01,
++	0x03    /* 3 = request */
++};
++
++static uint8_t __testdata_udhcp_options_hash_option_requested_ip_address[] = { 
++	0x32,
++	0x04,
++	0x0a, 0x04, 0x03, 0xad  /* 10.4.3.173 */
++};
++
++static uint8_t __testdata_udhcp_options_hash_option_vendor_class_identifier[] = {
++	0x3c,
++	0x0c,
++	/* dhcpcd-5.5.6 */
++	0x64, 0x68, 0x63, 0x70, 0x63, 0x64, 0x2d, 0x35, 0x2e, 0x35, 0x2e, 0x36
++};
++
++static uint8_t __testdata_udhcp_options_hash_option_bad_ip_address_long[] = {
++	0x03,
++	0x05,
++	0x01, 0x02, 0x03, 0x04, 0x05
++};
++
++static uint8_t __testdata_udhcp_options_hash_option_bad_ip_address_short[] = {
++	0x03,
++	0x03,
++	0x01, 0x02, 0x03
++};
++
++static uint8_t __testdata_udhcp_options_hash_packet_data_correct[] = {
++	0x01,                                                       /* REQUEST */
++	0x01, 0x06,                                                 /* Ethernet */
++	0x00,                                                       /* Hops */
++	0xf3, 0x78, 0xca, 0x43,                                     /* XID */
++	0x00, 0x00,                                                 /* seconds elapsed */
++	0x00, 0x00,                                                 /* flags (unicast) */
++	0x00, 0x00, 0x00, 0x00,                                     /* ciaddr */
++	0x00, 0x00, 0x00, 0x00,                                     /* yiaddr */
++	0x00, 0x00, 0x00, 0x00,                                     /* next server */
++	0x00, 0x00, 0x00, 0x00,                                     /* relay agent */
++	0xfc, 0xc2, 0xde, 0x54, 0xab, 0xfb,                         /* chaddr */
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* chaddr padding */
++	/* SNAME */
++	/* include requested IP address 10.4.3.173 + END */
++	0x32, 0x04, 0x0a, 0x04, 0x03, 0xad, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	/* FILENAME */
++	/* includes vendor class identifier dhcpcd-5.5.6 + END */
++	0x3c, 0x0c, 0x64, 0x68, 0x63, 0x70, 0x63, 0x64, 0x2d, 0x35, 0x2e, 0x35, 0x2, 0xe36, 0xff, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x63, 0x82, 0x53, 0x63,                                     /* magic */
++	/* options */
++	0x35, 0x01, 0x03,                                           /* message type REQUEST */
++	0x39, 0x02, 0x05, 0xdc,                                     /* max message size 1500 */
++	/* host name android-e5824095ed0802e4 */
++	0x0c, 0x18, 0x61, 0x6e, 0x64, 0x72, 0x6f, 0x69, 0x64, 0x2d, 0x65, 0x35, 0x38, 0x32, 0x34, 0x30,
++	0x39, 0x35, 0x65, 0x64, 0x30, 0x38, 0x30, 0x32, 0x65, 0x34,
++	/* parameter request list */
++	0x37, 0x09, 0x01, 0x21, 0x03, 0x06, 0x0f, 0x1c, 0x33, 0x3a, 0x3b,
++	0x34, 0x01, 0x03,                                           /* overload 3 */
++	0xff                                                        /* END */
++};
++
++static uint8_t __testdata_udhcp_options_hash_packet_data_missing_end_in_file[] = {
++	0x01,                                                       /* REQUEST */
++	0x01, 0x06,                                                 /* Ethernet */
++	0x00,                                                       /* Hops */
++	0xf3, 0x78, 0xca, 0x43,                                     /* XID */
++	0x00, 0x00,                                                 /* seconds elapsed */
++	0x00, 0x00,                                                 /* flags (unicast) */
++	0x00, 0x00, 0x00, 0x00,                                     /* ciaddr */
++	0x00, 0x00, 0x00, 0x00,                                     /* yiaddr */
++	0x00, 0x00, 0x00, 0x00,                                     /* next server */
++	0x00, 0x00, 0x00, 0x00,                                     /* relay agent */
++	0xfc, 0xc2, 0xde, 0x54, 0xab, 0xfb,                         /* chaddr */
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* chaddr padding */
++	/* SNAME */
++	/* include requested IP address 10.4.3.173 + END */
++	0x32, 0x04, 0x0a, 0x04, 0x03, 0xad, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	/* FILENAME */
++	/* includes vendor class identifier dhcpcd-5.5.6 + END */
++	0x3c, 0x0c, 0x64, 0x68, 0x63, 0x70, 0x63, 0x64, 0x2d, 0x35, 0x2e, 0x35, 0x2, 0xe36, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x63, 0x82, 0x53, 0x63,                                     /* magic */
++	/* options */
++	0x35, 0x01, 0x03,                                           /* message type REQUEST */
++	0x39, 0x02, 0x05, 0xdc,                                     /* max message size 1500 */
++	/* host name android-e5824095ed0802e4 */
++	0x0c, 0x18, 0x61, 0x6e, 0x64, 0x72, 0x6f, 0x69, 0x64, 0x2d, 0x65, 0x35, 0x38, 0x32, 0x34, 0x30,
++	0x39, 0x35, 0x65, 0x64, 0x30, 0x38, 0x30, 0x32, 0x65, 0x34,
++	/* parameter request list */
++	0x37, 0x09, 0x01, 0x21, 0x03, 0x06, 0x0f, 0x1c, 0x33, 0x3a, 0x3b,
++	0x34, 0x01, 0x03,                                           /* overload 3 */
++	0xff                                                        /* END */
++};
++
++static uint8_t __testdata_udhcp_options_hash_packet_data_request_list_too_long[] = {
++	0x01,                                                       /* REQUEST */
++	0x01, 0x06,                                                 /* Ethernet */
++	0x00,                                                       /* Hops */
++	0xf3, 0x78, 0xca, 0x43,                                     /* XID */
++	0x00, 0x00,                                                 /* seconds elapsed */
++	0x00, 0x00,                                                 /* flags (unicast) */
++	0x00, 0x00, 0x00, 0x00,                                     /* ciaddr */
++	0x00, 0x00, 0x00, 0x00,                                     /* yiaddr */
++	0x00, 0x00, 0x00, 0x00,                                     /* next server */
++	0x00, 0x00, 0x00, 0x00,                                     /* relay agent */
++	0xfc, 0xc2, 0xde, 0x54, 0xab, 0xfb,                         /* chaddr */
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* chaddr padding */
++	/* SNAME */
++	/* include requested IP address 10.4.3.173 + END */
++	0x32, 0x04, 0x0a, 0x04, 0x03, 0xad, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	/* FILENAME */
++	/* includes vendor class identifier dhcpcd-5.5.6 + END */
++	0x3c, 0x0c, 0x64, 0x68, 0x63, 0x70, 0x63, 0x64, 0x2d, 0x35, 0x2e, 0x35, 0x2, 0xe36, 0xff, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++	0x63, 0x82, 0x53, 0x63,                                     /* magic */
++	/* options */
++	0x35, 0x01, 0x03,                                           /* message type REQUEST */
++	0x39, 0x02, 0x05, 0xdc,                                     /* max message size 1500 */
++	/* host name android-e5824095ed0802e4 */
++	0x0c, 0x18, 0x61, 0x6e, 0x64, 0x72, 0x6f, 0x69, 0x64, 0x2d, 0x65, 0x35, 0x38, 0x32, 0x34, 0x30,
++	0x39, 0x35, 0x65, 0x64, 0x30, 0x38, 0x30, 0x32, 0x65, 0x34,
++	/* parameter request list */
++	0x37, 0x0e, 0x01, 0x21, 0x03, 0x06, 0x0f, 0x1c, 0x33, 0x3a, 0x3b,
++	0x34, 0x01, 0x03,                                           /* overload 3 */
++	0xff                                                        /* END */
++};
++
++#endif /* UNIT_TEST */
++
++void opthash_init(void)
++{
++	int i;
++
++	for (i = 0; i < OPTHASH_SIZE; i++)
++		opthash[i] = NULL;
++}
++
++static void optvalue_destroy(opt_data *link)
++{
++	if (link == NULL)
++		return;
++
++	optvalue_destroy(link->next);
++
++	free(link);
++}
++
++static void opthash_destroy_bucket(opthash_entry *link)
++{
++	if (link == NULL)
++		return;
++
++	if (link->next != NULL)
++		opthash_destroy_bucket(link->next);
++	
++	if (link->data->next != NULL)
++		optvalue_destroy(link->data->next);
++
++	free(link);
++}
++
++void opthash_destroy(void)
++{
++	int i;
++
++	for (i = 0; i < OPTHASH_SIZE; i++) {
++		if (opthash[i] == NULL)
++			continue;
++
++		opthash_destroy_bucket(opthash[i]);
++		opthash[i] = NULL;
++	}
++}
++
++static int FAST_FUNC optvalue_append(opt_data *link, uint8_t *data)
++{
++	if (link->next != NULL)
++		return optvalue_append(link->next, data);
++
++	link->next = (opt_data *)xmalloc(sizeof(opt_data));
++	*link->next = (opt_data) {data, NULL};
++
++	return 0;
++}
++
++#if ENABLE_UNIT_TEST
++
++BBUNIT_DEFINE_TEST(optvalue_append)
++{
++	opt_data *head = NULL;
++
++	head = (opt_data *) malloc(sizeof(*head));
++	BBUNIT_ASSERT_NOTNULL(head);
++
++	*head = (opt_data) {__testdata_udhcp_options_hash_option_message_type_request, NULL};
++
++	BBUNIT_ASSERT_EQ(optvalue_append(head, __testdata_udhcp_options_hash_option_requested_ip_address), 0);
++	BBUNIT_ASSERT_EQ(head->next->ptr, __testdata_udhcp_options_hash_option_requested_ip_address);
++	BBUNIT_ASSERT_EQ(head->next->next, NULL);
++	
++	BBUNIT_ENDTEST;
++
++	free(head->next);
++	free(head);
++}
++
++#endif /* ENABLE_UNIT_TEST */
++
++static int opthash_insert(opthash_entry **link, uint8_t code, uint8_t *data)
++{
++	if (*link == NULL) {
++		*link = xmalloc(sizeof(opthash_entry));
++		**link = (opthash_entry) {code, {(opt_data) {data, NULL}}, NULL};
++
++		return 0;
++	} 
++
++	if ((*link)->code == code)
++		return optvalue_append((*link)->data, data);
++
++	return opthash_insert(&((*link)->next), code, data);
++}
++
++#if ENABLE_UNIT_TEST
++
++BBUNIT_DEFINE_TEST(opthash_insert)
++{
++	opthash_entry *bucket = NULL;
++
++	/* add option message type REQUEST to bucket */
++
++	BBUNIT_ASSERT_EQ(opthash_insert(&bucket, __testdata_udhcp_options_hash_option_message_type_request[0], 
++				__testdata_udhcp_options_hash_option_message_type_request), 0);
++	BBUNIT_ASSERT_EQ(bucket->code, __testdata_udhcp_options_hash_option_message_type_request[0]);
++	BBUNIT_ASSERT_EQ(bucket->data[0].ptr, __testdata_udhcp_options_hash_option_message_type_request);
++	BBUNIT_ASSERT_EQ(bucket->data[0].next, NULL);
++	BBUNIT_ASSERT_EQ(bucket->next, NULL);
++
++	/* add option requested IP address 10.4.3.173 to bucket */
++
++	BBUNIT_ASSERT_EQ(opthash_insert(&bucket, __testdata_udhcp_options_hash_option_requested_ip_address[0], 
++				__testdata_udhcp_options_hash_option_requested_ip_address), 0);
++	BBUNIT_ASSERT_EQ(bucket->next->code, __testdata_udhcp_options_hash_option_requested_ip_address[0]);
++	BBUNIT_ASSERT_EQ(bucket->next->data[0].ptr, __testdata_udhcp_options_hash_option_requested_ip_address);
++	BBUNIT_ASSERT_EQ(bucket->next->data[0].next, NULL);
++	BBUNIT_ASSERT_EQ(bucket->next->next, NULL);
++
++	/* add a second option requested IP address 10.4.3.173 to bucket */
++
++	BBUNIT_ASSERT_EQ(opthash_insert(&bucket, __testdata_udhcp_options_hash_option_requested_ip_address[0], 
++				__testdata_udhcp_options_hash_option_requested_ip_address), 0);
++	BBUNIT_ASSERT_NOTEQ(bucket->next->data[0].next, NULL);
++	BBUNIT_ASSERT_EQ(bucket->next->data[0].next->ptr, __testdata_udhcp_options_hash_option_requested_ip_address);
++	BBUNIT_ASSERT_EQ(bucket->next->data[0].next->next, NULL);
++
++	BBUNIT_ENDTEST;
++
++	free(bucket->next->data[0].next);
++	free(bucket->next);
++	free(bucket);
++}
++
++#endif /* ENABLE_UNIT_TEST */
++
++int opthash_add(uint8_t code, uint8_t *data)
++{
++	int opthash_index = code % OPTHASH_SIZE;
++
++	return opthash_insert(&opthash[opthash_index], code, data);
++}
++
++#if ENABLE_UNIT_TEST
++
++BBUNIT_DEFINE_TEST(opthash_add)
++{
++	int index_message_type_request = __testdata_udhcp_options_hash_option_message_type_request[0] % OPTHASH_SIZE;
++	int index_requested_ip_address = __testdata_udhcp_options_hash_option_requested_ip_address[0] % OPTHASH_SIZE;
++	int index_vendor_class_identifier = __testdata_udhcp_options_hash_option_vendor_class_identifier[0] % OPTHASH_SIZE;
++
++	BBUNIT_ASSERT_NOTEQ(index_message_type_request, index_requested_ip_address);
++	BBUNIT_ASSERT_NOTEQ(index_message_type_request, index_vendor_class_identifier);
++	BBUNIT_ASSERT_NOTEQ(index_requested_ip_address, index_vendor_class_identifier);
++
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_message_type_request[0],
++				__testdata_udhcp_options_hash_option_message_type_request), 0);
++	BBUNIT_ASSERT_EQ(opthash[index_message_type_request]->code, __testdata_udhcp_options_hash_option_message_type_request[0]);
++	BBUNIT_ASSERT_EQ(opthash[index_message_type_request]->data[0].ptr, __testdata_udhcp_options_hash_option_message_type_request);
++	BBUNIT_ASSERT_EQ(opthash[index_message_type_request]->data[0].next, NULL);
++	BBUNIT_ASSERT_EQ(opthash[index_message_type_request]->next, NULL);
++
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_requested_ip_address[0], 
++				__testdata_udhcp_options_hash_option_requested_ip_address), 0);
++	BBUNIT_ASSERT_EQ(opthash[index_requested_ip_address]->code, __testdata_udhcp_options_hash_option_requested_ip_address[0]);
++	BBUNIT_ASSERT_EQ(opthash[index_requested_ip_address]->data[0].ptr, __testdata_udhcp_options_hash_option_requested_ip_address);
++	BBUNIT_ASSERT_EQ(opthash[index_requested_ip_address]->data[0].next, NULL);
++	BBUNIT_ASSERT_EQ(opthash[index_requested_ip_address]->next, NULL);
++
++	/* add vendor class identifier twice */
++
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_vendor_class_identifier[0], 
++				__testdata_udhcp_options_hash_option_vendor_class_identifier), 0);
++	BBUNIT_ASSERT_EQ(opthash[index_vendor_class_identifier]->code, __testdata_udhcp_options_hash_option_vendor_class_identifier[0]);
++	BBUNIT_ASSERT_EQ(opthash[index_vendor_class_identifier]->data[0].ptr, __testdata_udhcp_options_hash_option_vendor_class_identifier);
++	BBUNIT_ASSERT_EQ(opthash[index_vendor_class_identifier]->data[0].next, NULL);
++	BBUNIT_ASSERT_EQ(opthash[index_vendor_class_identifier]->next, NULL);
++
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_vendor_class_identifier[0], 
++				__testdata_udhcp_options_hash_option_vendor_class_identifier), 0);
++	BBUNIT_ASSERT_EQ(opthash[index_vendor_class_identifier]->data[0].next->ptr, __testdata_udhcp_options_hash_option_vendor_class_identifier);
++	BBUNIT_ASSERT_EQ(opthash[index_vendor_class_identifier]->data[0].next->next, NULL);
++
++	BBUNIT_ENDTEST;
++
++	free(opthash[index_message_type_request]);
++	free(opthash[index_requested_ip_address]);
++	free(opthash[index_vendor_class_identifier]->data[0].next);
++	free(opthash[index_vendor_class_identifier]);
++}
++
++#endif /* ENABLE_UNIT_TEST */
++
++static opt_data *opthash_find(uint8_t code)
++{
++	int opthash_index = code % OPTHASH_SIZE;
++	opthash_entry *link = NULL;
++
++	if (opthash[opthash_index] == NULL)
++		return NULL;
++
++	for (link = opthash[opthash_index]; link != NULL; link = link->next) {
++		if (link->code == code)
++			return link->data;
++	}
++
++	return NULL;
++}
++
++#if ENABLE_UNIT_TEST
++
++BBUNIT_DEFINE_TEST(opthash_find)
++{
++	opt_data *data_message_type_request = NULL;
++	opt_data *data_requested_ip_address = NULL;
++	opt_data *data_vendor_class_identifier = NULL;
++
++	opthash_init();
++
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_message_type_request[0], 
++				__testdata_udhcp_options_hash_option_message_type_request), 0);
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_requested_ip_address[0], 
++				__testdata_udhcp_options_hash_option_requested_ip_address), 0);
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_vendor_class_identifier[0], 
++				__testdata_udhcp_options_hash_option_vendor_class_identifier), 0);
++
++	data_message_type_request = opthash_find(__testdata_udhcp_options_hash_option_message_type_request[0]);
++	data_requested_ip_address = opthash_find(__testdata_udhcp_options_hash_option_requested_ip_address[0]);
++	data_vendor_class_identifier = opthash_find(__testdata_udhcp_options_hash_option_vendor_class_identifier[0]);
++
++	BBUNIT_ASSERT_NOTEQ(data_message_type_request, NULL);
++	BBUNIT_ASSERT_NOTEQ(data_requested_ip_address, NULL);
++	BBUNIT_ASSERT_NOTEQ(data_vendor_class_identifier, NULL);
++
++	BBUNIT_ASSERT_EQ(data_message_type_request->ptr, __testdata_udhcp_options_hash_option_message_type_request);
++	BBUNIT_ASSERT_EQ(data_requested_ip_address->ptr, __testdata_udhcp_options_hash_option_requested_ip_address);
++	BBUNIT_ASSERT_EQ(data_vendor_class_identifier->ptr, __testdata_udhcp_options_hash_option_vendor_class_identifier);
++
++	BBUNIT_ENDTEST;
++	
++	opthash_destroy();
++}
++
++#endif /* ENABLE_UNIT_TEST */
++
++uint8_t *opthash_lookup_simple(uint8_t code, uint8_t *len)
++{
++	opt_data *data = opthash_find(code);
++
++	if (data == NULL)
++		return NULL;
++	
++	*len = data->ptr[OPT_LEN];
++	return data->ptr + OPT_DATA;
++}
++
++#if ENABLE_UNIT_TEST
++
++BBUNIT_DEFINE_TEST(opthash_lookup_simple)
++{
++	uint8_t len = 0;
++	uint8_t *value = NULL;
++
++	opthash_init();
++
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_message_type_request[0], 
++				__testdata_udhcp_options_hash_option_message_type_request), 0);
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_requested_ip_address[0], 
++				__testdata_udhcp_options_hash_option_requested_ip_address), 0);
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_vendor_class_identifier[0], 
++				__testdata_udhcp_options_hash_option_vendor_class_identifier), 0);
++
++	value = opthash_lookup_simple(250, &len);
++	BBUNIT_ASSERT_EQ(value, NULL);
++
++	value = opthash_lookup_simple(__testdata_udhcp_options_hash_option_message_type_request[0], &len);
++	BBUNIT_ASSERT_EQ(len, 1);
++	BBUNIT_ASSERT_EQ(value[0], 0x03);
++
++	value = opthash_lookup_simple(__testdata_udhcp_options_hash_option_requested_ip_address[0], &len);
++	BBUNIT_ASSERT_EQ(len, 4);
++	BBUNIT_ASSERT_EQ(memcmp(value, &__testdata_udhcp_options_hash_option_requested_ip_address[2], 4), 0);
++
++	value = opthash_lookup_simple(__testdata_udhcp_options_hash_option_vendor_class_identifier[0], &len);
++	BBUNIT_ASSERT_EQ(len, 12);
++	BBUNIT_ASSERT_EQ(memcmp(value, &__testdata_udhcp_options_hash_option_vendor_class_identifier[2], 12), 0);
++
++	BBUNIT_ENDTEST;
++	
++	opthash_destroy();
++}
++
++#endif /* ENABLE_UNIT_TEST */
++
++opthash_entry *opthash_foreach(int start_over)
++{
++	static int bucket_id = 0;
++	static opthash_entry *option = NULL;
++
++	if (start_over) {
++		bucket_id = 0;
++		option = NULL;
++	}
++
++	if (option != NULL) {
++		option = option->next;
++
++		if (option != NULL)
++			return option;
++	}
++	
++	while (bucket_id < OPTHASH_SIZE) {
++		if (opthash[bucket_id] == NULL) {
++			bucket_id++;
++			continue;
++		}
++
++		return opthash[bucket_id++];
++	}
++
++	return NULL;
++}
++
++#if ENABLE_UNIT_TEST
++
++BBUNIT_DEFINE_TEST(opthash_foreach)
++{
++	opthash_entry *option = NULL;
++	int i = 0;
++
++	opthash_init();
++
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_message_type_request[0], 
++				__testdata_udhcp_options_hash_option_message_type_request), 0);
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_requested_ip_address[0], 
++				__testdata_udhcp_options_hash_option_requested_ip_address), 0);
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_vendor_class_identifier[0], 
++				__testdata_udhcp_options_hash_option_vendor_class_identifier), 0);
++
++	while ((option = opthash_foreach(i == 0)) != NULL)
++		i++;
++
++	BBUNIT_ASSERT_EQ(i, 3);
++
++	BBUNIT_ENDTEST;
++
++	opthash_destroy();
++}
++
++#endif /* ENABLE_UNIT_TEST */
++
++
++int opthash_lookup_long(uint8_t code, uint8_t **value, uint16_t *len)
++{
++	uint16_t offset;
++	opt_data *link = NULL;
++	opt_data *head = opthash_find(code);
++
++	if (head == NULL)
++		return -1;
++
++	for (*len = 0, link = head; link != NULL; link = link->next)
++		*len += link->ptr[OPT_LEN];
++
++	*value = xmalloc(*len);
++
++	for (offset = 0, link = head; link != NULL; link = link->next) {
++		memcpy(*value + offset, link->ptr + OPT_DATA, link->ptr[OPT_LEN]);
++		offset += link->ptr[OPT_LEN];
++	}
++
++	return 0;
++}
++
++#if ENABLE_UNIT_TEST
++
++BBUNIT_DEFINE_TEST(opthash_lookup_long)
++{
++	uint16_t len = 0;
++	uint8_t *value = NULL;
++
++	opthash_init();
++
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_message_type_request[0], 
++				__testdata_udhcp_options_hash_option_message_type_request), 0);
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_requested_ip_address[0], 
++				__testdata_udhcp_options_hash_option_requested_ip_address), 0);
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_vendor_class_identifier[0], 
++				__testdata_udhcp_options_hash_option_vendor_class_identifier), 0);
++	BBUNIT_ASSERT_EQ(opthash_add(__testdata_udhcp_options_hash_option_vendor_class_identifier[0], 
++				__testdata_udhcp_options_hash_option_vendor_class_identifier), 0);
++
++	BBUNIT_ASSERT_NOTEQ(opthash_lookup_long(250, &value, &len), 0);
++	BBUNIT_ASSERT_EQ(value, NULL);
++
++	BBUNIT_ASSERT_EQ(opthash_lookup_long(__testdata_udhcp_options_hash_option_message_type_request[0], &value, &len), 0);
++	BBUNIT_ASSERT_EQ(len, 1);
++	BBUNIT_ASSERT_EQ(value[0], 0x03);
++
++	free(value);
++
++	BBUNIT_ASSERT_EQ(opthash_lookup_long(__testdata_udhcp_options_hash_option_requested_ip_address[0], &value, &len), 0);
++	BBUNIT_ASSERT_EQ(len, 4);
++	BBUNIT_ASSERT_EQ(memcmp(value, &__testdata_udhcp_options_hash_option_requested_ip_address[2], 4), 0);
++
++	free(value);
++
++	BBUNIT_ASSERT_EQ(opthash_lookup_long(__testdata_udhcp_options_hash_option_vendor_class_identifier[0], &value, &len), 0);
++	BBUNIT_ASSERT_EQ(len, 24);
++	BBUNIT_ASSERT_EQ(memcmp(value, &__testdata_udhcp_options_hash_option_vendor_class_identifier[2], 12), 0);
++	BBUNIT_ASSERT_EQ(memcmp(value + 12, &__testdata_udhcp_options_hash_option_vendor_class_identifier[2], 12), 0);
++
++	free(value);
++
++	BBUNIT_ENDTEST;
++
++	opthash_destroy();
++}
++
++#endif /* ENABLE_UNIT_TEST */
++
++
++int udhcp_optsize_fits_bounds(uint8_t *optionptr, int rem)
++{
++	const struct dhcp_optflag *optflag;
++	uint8_t code, len;
++
++	if (rem < 3) {
++		bb_error_msg("checks for zero length options not implemented");
++		return 0;
++	}
++
++	code = optionptr[OPT_CODE];
++	len = optionptr[OPT_LEN];
++
++	if (len > rem - 2) {
++		bb_error_msg("option %d too long (%d bytes)", code, len);
++		return 0;
++	}
++
++	for (optflag = dhcp_optflags; optflag->code; optflag++) {
++		struct optionlength_bounds bounds;
++		
++		if (optflag->code != code)
++			continue;
++
++		bounds = dhcp_option_lengths[optflag->flags & OPTION_TYPE_MASK];
++
++		return (len >= bounds.min && len <= bounds.max);
++	}
++
++	return (len > 0);
++}
++
++#if ENABLE_UNIT_TEST
++
++BBUNIT_DEFINE_TEST(udhcp_optsize_fits_bounds)
++{
++	BBUNIT_ASSERT_EQ(udhcp_optsize_fits_bounds(__testdata_udhcp_options_hash_option_vendor_class_identifier, 10), 0);
++	BBUNIT_ASSERT_NOTEQ(udhcp_optsize_fits_bounds(__testdata_udhcp_options_hash_option_vendor_class_identifier, 14), 0);
++	BBUNIT_ASSERT_NOTEQ(udhcp_optsize_fits_bounds(__testdata_udhcp_options_hash_option_requested_ip_address, 6), 0);
++	BBUNIT_ASSERT_EQ(udhcp_optsize_fits_bounds(__testdata_udhcp_options_hash_option_bad_ip_address_long, 7), 0);
++	BBUNIT_ASSERT_EQ(udhcp_optsize_fits_bounds(__testdata_udhcp_options_hash_option_bad_ip_address_short, 5), 0);
++
++	BBUNIT_ENDTEST;
++}
++
++#endif /* ENABLE_UNIT_TEST */
++
++
++int udhcp_prepare_opthash(struct dhcp_packet *packet, int packet_len)
++{
++	int rem;
++	uint8_t *optionptr, overload;
++
++	overload = 0;
++	optionptr = packet->options;
++	rem = packet_len - DHCP4_FIXEDLEN;
++
++	while (rem > 0) {
++		if (optionptr[OPT_CODE] == DHCP_PADDING) {
++			rem--;
++			optionptr++;
++			continue;
++		}
++
++		if (optionptr[OPT_CODE] == DHCP_END) {
++			rem--;
++			optionptr++;
++
++			if (overload > 3) {
++				bb_error_msg("overload option: invalid value %d", overload);
++				goto error;
++			}
++
++			if (overload & 0x01) {
++				optionptr = packet->file;
++				rem = sizeof(packet->file);
++				overload ^= 0x01;
++				continue;
++			}
++
++			if (overload & 0x02) {
++				optionptr = packet->sname;
++				rem = sizeof(packet->sname);
++				overload ^= 0x02;
++				continue;
++			}
++
++			return 0;
++		}
++
++		if (rem < 3) {
++			bb_error_msg("next option should have length and value, but packet size does not suffice");
++			goto error;
++		}
++
++		if (optionptr[OPT_CODE] == DHCP_OPTION_OVERLOAD) {
++			overload = optionptr[OPT_DATA];
++			rem -= 3;
++			optionptr += 3;
++			continue;
++		}
++	
++		if (! udhcp_optsize_fits_bounds(optionptr, rem)) {
++			bb_error_msg("option %d failed bounds check", optionptr[OPT_CODE]);
++			goto error;
++		}
++
++		if (opthash_add(optionptr[OPT_CODE], (uint8_t *) optionptr) != 0) {
++			bb_error_msg("couldn't add option %d to hash", optionptr[OPT_CODE]);
++			goto error;
++		}
++
++		rem -= optionptr[OPT_LEN] + 2;
++		optionptr += optionptr[OPT_LEN] + 2;
++	}
++
++	bb_error_msg("bad packet, option, file or sname field without END tag.");
++
++error:
++	
++	opthash_destroy();
++	
++	return -1;
++}
++
++#if ENABLE_UNIT_TEST
++
++BBUNIT_DEFINE_TEST(udhcp_prepare_opthash)
++{
++	struct dhcp_packet *packet;
++	uint8_t *optptr;
++	uint8_t len8;
++	struct in_addr in;
++
++	opthash_init();
++
++	packet = (struct dhcp_packet *) __testdata_udhcp_options_hash_packet_data_correct;
++
++	BBUNIT_ASSERT_EQ(udhcp_prepare_opthash(packet, sizeof(__testdata_udhcp_options_hash_packet_data_correct)), 0);
++
++	BBUNIT_ASSERT_NOTEQ((optptr = opthash_lookup_simple(0x35, &len8)), NULL);
++	BBUNIT_ASSERT_EQ(len8, 1);
++	BBUNIT_ASSERT_EQ(optptr[0], 0x03);
++
++	BBUNIT_ASSERT_NOTEQ((optptr = opthash_lookup_simple(0x32, &len8)), NULL);
++	BBUNIT_ASSERT_EQ(len8, 4);
++	in.s_addr = (*(in_addr_t *) optptr);
++	BBUNIT_ASSERT_EQ(strcmp(inet_ntoa(in), "10.4.3.173"), 0);
++
++	opthash_destroy();
++
++	packet = (struct dhcp_packet *) __testdata_udhcp_options_hash_packet_data_missing_end_in_file;
++	BBUNIT_ASSERT_NOTEQ(udhcp_prepare_opthash(packet, sizeof(__testdata_udhcp_options_hash_packet_data_missing_end_in_file)), 0);
++
++	packet = (struct dhcp_packet *) __testdata_udhcp_options_hash_packet_data_request_list_too_long;
++	BBUNIT_ASSERT_NOTEQ(udhcp_prepare_opthash(packet, sizeof(__testdata_udhcp_options_hash_packet_data_request_list_too_long)), 0);
++
++	BBUNIT_ENDTEST;
++
++	opthash_destroy();
++}
++
++#endif /* ENABLE_UNIT_TEST */
++
++
+diff --git a/networking/udhcp/options_hash.h b/networking/udhcp/options_hash.h
+new file mode 100644
+index 0000000..0f896e1
+--- /dev/null
++++ b/networking/udhcp/options_hash.h
+@@ -0,0 +1,39 @@
++#ifndef UDHCP_OPTIONS_H
++#define UDHCP_OPTIONS_H 1
++
++#include <sys/types.h>
++#include <stdint.h>
++#include "common.h"
++
++#define OPTHASH_SIZE 23
++
++extern const struct dhcp_optflag dhcp_optflags[];
++extern const char dhcp_option_strings[] ALIGN1;
++
++typedef struct _opt_data {
++	uint8_t *ptr;
++	struct _opt_data *next;
++} opt_data;
++
++typedef struct _opthash_entry {
++	uint8_t code;
++	opt_data data[1];
++	struct _opthash_entry *next;
++} opthash_entry;
++
++extern opthash_entry *opthash[];
++
++void opthash_init(void);
++void opthash_destroy(void);
++
++int opthash_add(uint8_t code, uint8_t *data);
++
++uint8_t *opthash_lookup_simple(uint8_t code, uint8_t *len);
++int opthash_lookup_long(uint8_t code, uint8_t **value, uint16_t *len);
++
++opthash_entry *opthash_foreach(int start_over);
++
++int udhcp_optsize_fits_bounds(uint8_t *optionptr, int rem);
++int udhcp_prepare_opthash(struct dhcp_packet *packet, int packet_len);
++
++#endif
+-- 
+2.1.3
+

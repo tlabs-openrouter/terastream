@@ -1,0 +1,108 @@
+From 5fa3753f5979313eeb3432a072753b2064610fac Mon Sep 17 00:00:00 2001
+From: Christian Carstensen <cc@nanl.de>
+Date: Tue, 18 Nov 2014 17:44:38 +0100
+Subject: [PATCH 7/9] udhcp: include min/max in dhcp_option_lengths
+
+---
+ networking/udhcp/common.c | 34 +++++++++++++++++-----------------
+ networking/udhcp/common.h |  8 +++++++-
+ networking/udhcp/dhcpc.c  |  2 +-
+ 3 files changed, 25 insertions(+), 19 deletions(-)
+
+diff --git a/networking/udhcp/common.c b/networking/udhcp/common.c
+index cc8f547..9e5b830 100644
+--- a/networking/udhcp/common.c
++++ b/networking/udhcp/common.c
+@@ -149,24 +149,24 @@ const char dhcp_option_strings[] ALIGN1 =
+  * is the number of elements, multiply in by one element's string width
+  * (len_of_option_as_string[opt_type]) and you know how wide string you need.
+  */
+-const uint8_t dhcp_option_lengths[] ALIGN1 = {
+-	[OPTION_IP] =      4,
+-	[OPTION_IP_PAIR] = 8,
+-//	[OPTION_BOOLEAN] = 1,
+-	[OPTION_STRING] =  1,  /* ignored by udhcp_str2optset */
+-	[OPTION_STRING_HOST] = 1,  /* ignored by udhcp_str2optset */
++const struct optionlength_bounds dhcp_option_lengths[] ALIGN1 = {
++	[OPTION_IP] =      { 4, 4 },
++	[OPTION_IP_PAIR] = { 8, 8 },
++//	[OPTION_BOOLEAN] = { 1, 1 },
++	[OPTION_STRING] =  { 1, 255 }, /* ignored by udhcp_str2optset */
++	[OPTION_STRING_HOST] = { 1, 255 },  /* ignored by udhcp_str2optset */
+ #if ENABLE_FEATURE_UDHCP_RFC3397
+-	[OPTION_DNS_STRING] = 1,  /* ignored by both udhcp_str2optset and xmalloc_optname_optval */
+-	[OPTION_SIP_SERVERS] = 1,
++	[OPTION_DNS_STRING] = { 1, 255 },  /* ignored by both udhcp_str2optset and xmalloc_optname_optval */
++	[OPTION_SIP_SERVERS] = { 1, 255},
+ #endif
+-	[OPTION_U8] =      1,
+-	[OPTION_U16] =     2,
+-//	[OPTION_S16] =     2,
+-	[OPTION_U32] =     4,
+-	[OPTION_S32] =     4,
++	[OPTION_U8] =      { 1, 1 },
++	[OPTION_U16] =     { 2, 2 },
++//	[OPTION_S16] =     { 2, 2 },
++	[OPTION_U32] =     { 4, 4 },
++	[OPTION_S32] =     { 4, 4 },
+ 	/* Just like OPTION_STRING, we use minimum length here */
+-	[OPTION_STATIC_ROUTES] = 5,
+-	[OPTION_6RD] =    22,  /* ignored by udhcp_str2optset */
++	[OPTION_STATIC_ROUTES] = { 5, 255 },
++	[OPTION_6RD] =    { 22, 252 },  /* ignored by udhcp_str2optset */
+ };
+ 
+ 
+@@ -311,7 +311,7 @@ void FAST_FUNC udhcp_add_simple_option(struct dhcp_packet *packet, uint8_t code,
+ 			uint8_t option[6], len;
+ 
+ 			option[OPT_CODE] = code;
+-			len = dhcp_option_lengths[dh->flags & OPTION_TYPE_MASK];
++			len = dhcp_option_lengths[dh->flags & OPTION_TYPE_MASK].min;
+ 			option[OPT_LEN] = len;
+ 			if (BB_BIG_ENDIAN)
+ 				data <<= 8 * (4 - len);
+@@ -472,7 +472,7 @@ int FAST_FUNC udhcp_str2optset(const char *const_str, void *arg)
+ 		val = strtok(NULL, ", \t");
+ 		if (!val)
+ 			break;
+-		length = dhcp_option_lengths[optflag->flags & OPTION_TYPE_MASK];
++		length = dhcp_option_lengths[optflag->flags & OPTION_TYPE_MASK].min;
+ 		retval = 0;
+ 		opt = buffer; /* new meaning for variable opt */
+ 		switch (optflag->flags & OPTION_TYPE_MASK) {
+diff --git a/networking/udhcp/common.h b/networking/udhcp/common.h
+index dfe30e8..e7bde38 100644
+--- a/networking/udhcp/common.h
++++ b/networking/udhcp/common.h
+@@ -192,7 +192,13 @@ struct option_set {
+ 
+ extern const struct dhcp_optflag dhcp_optflags[];
+ extern const char dhcp_option_strings[] ALIGN1;
+-extern const uint8_t dhcp_option_lengths[] ALIGN1;
++
++struct optionlength_bounds {
++	uint8_t min;
++	uint8_t max;
++};
++
++extern const struct optionlength_bounds dhcp_option_lengths[];
+ 
+ unsigned FAST_FUNC udhcp_option_idx(const char *name);
+ 
+diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
+index 3826106..91992a3 100644
+--- a/networking/udhcp/dhcpc.c
++++ b/networking/udhcp/dhcpc.c
+@@ -218,7 +218,7 @@ static NOINLINE char *xmalloc_optname_optval(uint8_t *option, const struct dhcp_
+ 	len = option[-OPT_DATA + OPT_LEN];
+ 
+ 	type = optflag->flags & OPTION_TYPE_MASK;
+-	optlen = dhcp_option_lengths[type];
++	optlen = dhcp_option_lengths[type].min;
+ 	upper_length = len_of_option_as_string[type]
+ 		* ((unsigned)(len + optlen - 1) / (unsigned)optlen);
+ 
+-- 
+2.1.3
+

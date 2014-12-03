@@ -1,0 +1,302 @@
+From 57a5f3bc8f7d17d62735d11c3d3851aeb688bfe5 Mon Sep 17 00:00:00 2001
+From: Christian Carstensen <cc@nanl.de>
+Date: Tue, 18 Nov 2014 17:32:29 +0100
+Subject: [PATCH 4/9] udhcp: better max option size calculation
+
+* removed CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS
+* disambiguated DHCP4/6 defines
+---
+ configs/TEST_nommu_defconfig    |  1 -
+ configs/TEST_noprintf_defconfig |  1 -
+ configs/TEST_rh9_defconfig      |  1 -
+ configs/android2_defconfig      |  1 -
+ configs/android_defconfig       |  1 -
+ configs/android_ndk_defconfig   |  1 -
+ configs/cygwin_defconfig        |  1 -
+ configs/freebsd_defconfig       |  1 -
+ networking/udhcp/Config.src     | 23 -----------------------
+ networking/udhcp/common.c       |  2 +-
+ networking/udhcp/common.h       | 32 +++++++++++++++-----------------
+ networking/udhcp/d6_common.h    |  7 +++++--
+ networking/udhcp/dhcp4o6.c      |  2 +-
+ networking/udhcp/packet.c       |  4 ++--
+ 14 files changed, 24 insertions(+), 54 deletions(-)
+
+diff --git a/configs/TEST_nommu_defconfig b/configs/TEST_nommu_defconfig
+index b45afd9..ba263f0 100644
+--- a/configs/TEST_nommu_defconfig
++++ b/configs/TEST_nommu_defconfig
+@@ -773,7 +773,6 @@ CONFIG_FEATURE_UDHCP_PORT=y
+ CONFIG_UDHCP_DEBUG=9
+ CONFIG_FEATURE_UDHCP_RFC3397=y
+ CONFIG_UDHCPC_DEFAULT_SCRIPT="/usr/share/udhcpc/default.script"
+-CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS=80
+ CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS="-R -n"
+ CONFIG_VCONFIG=y
+ CONFIG_WGET=y
+diff --git a/configs/TEST_noprintf_defconfig b/configs/TEST_noprintf_defconfig
+index 809b60c..6101030 100644
+--- a/configs/TEST_noprintf_defconfig
++++ b/configs/TEST_noprintf_defconfig
+@@ -777,7 +777,6 @@ CONFIG_DHCPD_LEASES_FILE=""
+ CONFIG_UDHCP_DEBUG=0
+ # CONFIG_FEATURE_UDHCP_RFC3397 is not set
+ CONFIG_UDHCPC_DEFAULT_SCRIPT=""
+-CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS=0
+ CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS=""
+ # CONFIG_UDPSVD is not set
+ # CONFIG_VCONFIG is not set
+diff --git a/configs/TEST_rh9_defconfig b/configs/TEST_rh9_defconfig
+index 565b826..dc5c36a 100644
+--- a/configs/TEST_rh9_defconfig
++++ b/configs/TEST_rh9_defconfig
+@@ -793,7 +793,6 @@ CONFIG_FEATURE_UDHCP_PORT=y
+ CONFIG_UDHCP_DEBUG=9
+ CONFIG_FEATURE_UDHCP_RFC3397=y
+ CONFIG_UDHCPC_DEFAULT_SCRIPT="/usr/share/udhcpc/default.script"
+-CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS=80
+ CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS="-R -n"
+ CONFIG_UDPSVD=y
+ CONFIG_VCONFIG=y
+diff --git a/configs/android2_defconfig b/configs/android2_defconfig
+index 4dfbdb5..48549a2 100644
+--- a/configs/android2_defconfig
++++ b/configs/android2_defconfig
+@@ -832,7 +832,6 @@ CONFIG_UDHCP_DEBUG=9
+ CONFIG_FEATURE_UDHCP_RFC3397=y
+ CONFIG_FEATURE_UDHCP_8021Q=y
+ CONFIG_UDHCPC_DEFAULT_SCRIPT="/usr/share/udhcpc/default.script"
+-CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS=80
+ CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS="-R -n"
+ # CONFIG_UDPSVD is not set
+ # CONFIG_VCONFIG is not set
+diff --git a/configs/android_defconfig b/configs/android_defconfig
+index e35830e..6502570 100644
+--- a/configs/android_defconfig
++++ b/configs/android_defconfig
+@@ -862,7 +862,6 @@ CONFIG_UDHCP_DEBUG=9
+ CONFIG_FEATURE_UDHCP_RFC3397=y
+ CONFIG_FEATURE_UDHCP_8021Q=y
+ CONFIG_UDHCPC_DEFAULT_SCRIPT="/usr/share/udhcpc/default.script"
+-CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS=80
+ CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS="-R -n"
+ CONFIG_UDPSVD=y
+ CONFIG_VCONFIG=y
+diff --git a/configs/android_ndk_defconfig b/configs/android_ndk_defconfig
+index 01cc2dd..20c931d 100644
+--- a/configs/android_ndk_defconfig
++++ b/configs/android_ndk_defconfig
+@@ -848,7 +848,6 @@ CONFIG_UDHCP_DEBUG=9
+ CONFIG_FEATURE_UDHCP_RFC3397=y
+ CONFIG_FEATURE_UDHCP_8021Q=y
+ CONFIG_UDHCPC_DEFAULT_SCRIPT="/usr/share/udhcpc/default.script"
+-CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS=80
+ CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS="-R -n"
+ CONFIG_UDPSVD=y
+ CONFIG_VCONFIG=y
+diff --git a/configs/cygwin_defconfig b/configs/cygwin_defconfig
+index aa346e3..8284bb9 100644
+--- a/configs/cygwin_defconfig
++++ b/configs/cygwin_defconfig
+@@ -832,7 +832,6 @@ CONFIG_UDHCP_DEBUG=0
+ # CONFIG_FEATURE_UDHCP_RFC3397 is not set
+ # CONFIG_FEATURE_UDHCP_8021Q is not set
+ CONFIG_UDHCPC_DEFAULT_SCRIPT=""
+-CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS=0
+ CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS=""
+ CONFIG_UDPSVD=y
+ # CONFIG_VCONFIG is not set
+diff --git a/configs/freebsd_defconfig b/configs/freebsd_defconfig
+index ec3ed03..2d7a73c 100644
+--- a/configs/freebsd_defconfig
++++ b/configs/freebsd_defconfig
+@@ -810,7 +810,6 @@ CONFIG_DHCPD_LEASES_FILE=""
+ CONFIG_UDHCP_DEBUG=0
+ # CONFIG_FEATURE_UDHCP_RFC3397 is not set
+ CONFIG_UDHCPC_DEFAULT_SCRIPT=""
+-CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS=0
+ CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS=""
+ # CONFIG_UDPSVD is not set
+ # CONFIG_VCONFIG is not set
+diff --git a/networking/udhcp/Config.src b/networking/udhcp/Config.src
+index f8876cf..bc32164 100644
+--- a/networking/udhcp/Config.src
++++ b/networking/udhcp/Config.src
+@@ -141,29 +141,6 @@ config UDHCPC_DEFAULT_SCRIPT
+ 	  examples/udhcp for a working example. Normally it is safe
+ 	  to leave this untouched.
+ 
+-config UDHCPC_SLACK_FOR_BUGGY_SERVERS
+-	int "DHCP options slack buffer size"
+-	default 80
+-	range 0 924
+-	depends on UDHCPD || UDHCPC
+-	help
+-	  Some buggy DHCP servers send DHCP offer packets with option
+-	  field larger than we expect (which might also be considered a
+-	  buffer overflow attempt). These packets are normally discarded.
+-	  If circumstances beyond your control force you to support such
+-	  servers, this may help. The upper limit (924) makes dhcpc accept
+-	  even 1500 byte packets (maximum-sized ethernet packets).
+-
+-	  This option does not make dhcp[cd] emit non-standard
+-	  sized packets.
+-
+-	  Known buggy DHCP servers:
+-	  3Com OfficeConnect Remote 812 ADSL Router:
+-	    seems to confuse maximum allowed UDP packet size with
+-	    maximum size of entire IP packet, and sends packets which are
+-	    28 bytes too large.
+-	  Seednet (ISP) VDSL: sends packets 2 bytes too large.
+-
+ config FEATURE_DHCP4o6C
+ 	bool "Use DHCPv4 over DHCPv6 (client only)"
+ 	default y
+diff --git a/networking/udhcp/common.c b/networking/udhcp/common.c
+index 68c954e..fb60a7c 100644
+--- a/networking/udhcp/common.c
++++ b/networking/udhcp/common.c
+@@ -290,7 +290,7 @@ void FAST_FUNC udhcp_add_binary_option(struct dhcp_packet *packet, uint8_t *addo
+ 
+ 	len = OPT_DATA + addopt[OPT_LEN];
+ 	/* end position + (option code/length + addopt length) + end option */
+-	if (end + len + 1 >= DHCP_OPTIONS_BUFSIZE) {
++	if (end + len + 1 >= DHCP4_OPTIONS_BUFSIZE) {
+ //TODO: learn how to use overflow option if we exhaust packet->options[]
+ 		bb_error_msg("option 0x%02x did not fit into the packet",
+ 				addopt[OPT_CODE]);
+diff --git a/networking/udhcp/common.h b/networking/udhcp/common.h
+index d20659e..6f02850 100644
+--- a/networking/udhcp/common.h
++++ b/networking/udhcp/common.h
+@@ -18,12 +18,20 @@ extern const uint8_t MAC_BCAST_ADDR[6] ALIGN2; /* six all-ones */
+ 
+ 
+ /*** DHCP packet ***/
++#define PACKET_MTU              1500
++#define IP_HEADERLEN            (sizeof(struct iphdr))
++#define UDP_HEADERLEN           (sizeof(struct udphdr))
++#define DHCP4_FIXEDLEN          240
++#define DHCP4_OPTIONS_BUFSIZE   (PACKET_MTU - DHCP4_FIXEDLEN - UDP_HEADERLEN - IP_HEADERLEN)
+ 
+ /* DHCP protocol. See RFC 2131 */
+ #define DHCP_MAGIC              0x63825363
+-#define DHCP_OPTIONS_BUFSIZE    308
+ #define BOOTREQUEST             1
+ #define BOOTREPLY               2
++#define DHCP_PKT_SNAME_LEN      64
++#define DHCP_PKT_FILE_LEN       128
++#define DHCP_PKT_SNAME_LEN_STR  "64"
++#define DHCP_PKT_FILE_LEN_STR   "128"
+ 
+ //TODO: rename ciaddr/yiaddr/chaddr
+ struct dhcp_packet {
+@@ -41,15 +49,11 @@ struct dhcp_packet {
+ 	uint32_t siaddr_nip;
+ 	uint32_t gateway_nip; /* relay agent IP address */
+ 	uint8_t chaddr[16];   /* link-layer client hardware address (MAC) */
+-	uint8_t sname[64];    /* server host name (ASCIZ) */
+-	uint8_t file[128];    /* boot file name (ASCIZ) */
++	uint8_t sname[DHCP_PKT_SNAME_LEN];    /* server host name (ASCIZ) */
++	uint8_t file[DHCP_PKT_FILE_LEN];    /* boot file name (ASCIZ) */
+ 	uint32_t cookie;      /* fixed first four option bytes (99,130,83,99 dec) */
+-	uint8_t options[DHCP_OPTIONS_BUFSIZE + CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS];
++	uint8_t options[DHCP4_OPTIONS_BUFSIZE];
+ } PACKED;
+-#define DHCP_PKT_SNAME_LEN      64
+-#define DHCP_PKT_FILE_LEN      128
+-#define DHCP_PKT_SNAME_LEN_STR "64"
+-#define DHCP_PKT_FILE_LEN_STR "128"
+ 
+ struct ip_udp_dhcp_packet {
+ 	struct iphdr ip;
+@@ -63,17 +67,11 @@ struct udp_dhcp_packet {
+ } PACKED;
+ 
+ enum {
+-	IP_UDP_DHCP_SIZE = sizeof(struct ip_udp_dhcp_packet) - CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS,
+-	UDP_DHCP_SIZE    = sizeof(struct udp_dhcp_packet) - CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS,
+-	DHCP_SIZE        = sizeof(struct dhcp_packet) - CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS,
++	IP_UDP_DHCP_SIZE = sizeof(struct ip_udp_dhcp_packet),
++	UDP_DHCP_SIZE    = sizeof(struct udp_dhcp_packet),
++	DHCP_SIZE        = sizeof(struct dhcp_packet),
+ };
+ 
+-/* Let's see whether compiler understood us right */
+-struct BUG_bad_sizeof_struct_ip_udp_dhcp_packet {
+-	char c[IP_UDP_DHCP_SIZE == 576 ? 1 : -1];
+-};
+-
+-
+ /*** Options ***/
+ 
+ enum {
+diff --git a/networking/udhcp/d6_common.h b/networking/udhcp/d6_common.h
+index eb211ea..c68deb8 100644
+--- a/networking/udhcp/d6_common.h
++++ b/networking/udhcp/d6_common.h
+@@ -7,12 +7,16 @@
+ #ifndef UDHCP_D6_COMMON_H
+ #define UDHCP_D6_COMMON_H 1
+ 
++#include "common.h"
+ #include <netinet/ip6.h>
+ 
+ PUSH_AND_SET_FUNCTION_VISIBILITY_TO_HIDDEN
+ 
+ 
+ /*** DHCPv6 packet ***/
++#define PACKET_MTU                  1500
++#define DHCP6_FIXEDLEN               4
++#define DHCP6_OPTIONS_BUFSIZE        (PACKET_MTU - DHCP6_FIXEDLEN - UDP_HEADERLEN - IP_HEADERLEN)
+ 
+ /* DHCPv6 protocol. See RFC 3315 */
+ #define D6_MSG_SOLICIT              1
+@@ -34,8 +38,7 @@ struct d6_packet {
+ 		uint8_t d6_msg_type;
+ 		uint32_t d6_xid32;
+ 	} d6_u;
+-	uint8_t d6_options[576 - sizeof(struct iphdr) - sizeof(struct udphdr) - 4
+-			+ CONFIG_UDHCPC_SLACK_FOR_BUGGY_SERVERS];
++	uint8_t d6_options[DHCP6_OPTIONS_BUFSIZE];
+ } PACKED;
+ #define d6_msg_type d6_u.d6_msg_type
+ #define d6_xid32    d6_u.d6_xid32
+diff --git a/networking/udhcp/dhcp4o6.c b/networking/udhcp/dhcp4o6.c
+index 7d69470..a68ab94 100644
+--- a/networking/udhcp/dhcp4o6.c
++++ b/networking/udhcp/dhcp4o6.c
+@@ -345,7 +345,7 @@ static int dhcp4o6_get_dhcpv4_from_dhcpv6 (
+ 	/* D6_OPT_DHCPV4_MSG must be first option? Where is that defined? FIXME */
+ 
+ 	opt_len = (d6opt[2]<<8) + d6opt[3];
+-	if (opt_len < DHCP_SIZE - DHCP_OPTIONS_BUFSIZE) {
++	if (opt_len < DHCP_SIZE - DHCP6_OPTIONS_BUFSIZE) {
+ 		log1("D6_OPT_DHCPV4_MSG option too small");
+ 		return -1;
+ 	}
+diff --git a/networking/udhcp/packet.c b/networking/udhcp/packet.c
+index 148f525..6f6f7c1 100644
+--- a/networking/udhcp/packet.c
++++ b/networking/udhcp/packet.c
+@@ -149,7 +149,7 @@ int FAST_FUNC udhcp_send_raw_packet(struct dhcp_packet *dhcp_pkt,
+ 	 * Thus, we retain enough padding to not go below 300 BOOTP bytes.
+ 	 * Some devices have filters which drop DHCP packets shorter than that.
+ 	 */
+-	padding = DHCP_OPTIONS_BUFSIZE - 1 - udhcp_end_option(packet.data.options);
++	padding = DHCP4_OPTIONS_BUFSIZE - 1 - udhcp_end_option(packet.data.options);
+ 	if (padding > DHCP_SIZE - 300)
+ 		padding = DHCP_SIZE - 300;
+ 
+@@ -221,7 +221,7 @@ int FAST_FUNC udhcp_send_kernel_packet(struct dhcp_packet *dhcp_pkt,
+ 	}
+ 
+ 	udhcp_dump_packet(dhcp_pkt);
+-	padding = DHCP_OPTIONS_BUFSIZE - 1 - udhcp_end_option(dhcp_pkt->options);
++	padding = DHCP4_OPTIONS_BUFSIZE - 1 - udhcp_end_option(dhcp_pkt->options);
+ 	if (padding > DHCP_SIZE - 300)
+ 		padding = DHCP_SIZE - 300;
+ 	result = safe_write(fd, dhcp_pkt, DHCP_SIZE - padding);
+-- 
+2.1.3
+

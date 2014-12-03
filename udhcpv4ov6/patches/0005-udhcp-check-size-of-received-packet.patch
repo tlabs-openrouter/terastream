@@ -1,0 +1,44 @@
+From 4ad8fc2d2cdf1a08d1f7d5039a4ecc9f0482cd86 Mon Sep 17 00:00:00 2001
+From: Christian Carstensen <cc@nanl.de>
+Date: Tue, 18 Nov 2014 17:33:58 +0100
+Subject: [PATCH 5/9] udhcp: check size of received packet
+
+* check packet too small/too large in udhcp_recv_raw_packet()
+---
+ networking/udhcp/dhcpc.c | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
+index ccb5dc4..3826106 100644
+--- a/networking/udhcp/dhcpc.c
++++ b/networking/udhcp/dhcpc.c
+@@ -957,7 +957,10 @@ static NOINLINE int udhcp_recv_raw_packet(struct dhcp_packet *dhcp_pkt, int fd)
+ 	}
+  skip_udp_sum_check:
+ 
+-	if (packet.data.cookie != htonl(DHCP_MAGIC)) {
++	bytes -= sizeof(packet.ip) + sizeof(packet.udp);
++
++	if (bytes < offsetof(struct dhcp_packet, options)
++	  || packet.data.cookie != htonl(DHCP_MAGIC)) {
+ 		bb_info_msg("Packet with bad magic, ignoring");
+ 		return -2;
+ 	}
+@@ -965,8 +968,12 @@ static NOINLINE int udhcp_recv_raw_packet(struct dhcp_packet *dhcp_pkt, int fd)
+ 	log1("Received a packet");
+ 	udhcp_dump_packet(&packet.data);
+ 
+-	bytes -= sizeof(packet.ip) + sizeof(packet.udp);
+-	memcpy(dhcp_pkt, &packet.data, bytes);
++	if (bytes > sizeof(*dhcp_pkt))
++		bb_info_msg("Payload size (%d bytes) exceeds DHCP packet max size (%lu bytes). Truncating.", bytes, sizeof(*dhcp_pkt));
++
++	memset(dhcp_pkt, 0, sizeof(*dhcp_pkt));
++	memcpy(dhcp_pkt, &packet.data, bytes > sizeof(*dhcp_pkt) ? sizeof(*dhcp_pkt) : bytes);
++
+ 	return bytes;
+ }
+ 
+-- 
+2.1.3
+

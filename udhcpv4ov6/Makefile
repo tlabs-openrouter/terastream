@@ -8,13 +8,15 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=udhcpv4ov6
-PKG_VERSION:=1.22.1
-PKG_RELEASE:=2
+PKG_VERSION:=2014-11-18
+PKG_RELEASE:=1
 
-PKG_SOURCE:=busybox-$(PKG_VERSION).tar.bz2
-PKG_SOURCE_URL:=http://www.busybox.net/downloads \
-		http://distfiles.gentoo.org/distfiles/
-PKG_MD5SUM:=337d1a15ab1cb1d4ed423168b1eb7d7e
+PKG_SOURCE_PROTO:=git
+PKG_REV:=1a1143907c84308781e23f07d0c6c597bfd13abb
+PKG_SOURCE_VERSION:=$(PKG_REV)
+PKG_SOURCE:=busybox-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
+PKG_SOURCE_URL:=git://busybox.net/busybox.git
+PKG_SOURCE_SUBDIR:=busybox-$(PKG_VERSION)
 PKG_BUILD_DIR:=$(BUILD_DIR)/udhcpv4ov6-$(PKG_VERSION)/busybox-$(PKG_VERSION)
 
 PKG_BUILD_PARALLEL:=1

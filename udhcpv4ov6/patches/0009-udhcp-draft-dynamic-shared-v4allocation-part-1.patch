@@ -1,0 +1,177 @@
+From ecc815c1cef84240e701014bb1e4a22f5c9f1027 Mon Sep 17 00:00:00 2001
+From: Christian Carstensen <cc@nanl.de>
+Date: Tue, 18 Nov 2014 17:49:02 +0100
+Subject: [PATCH 9/9] udhcp: draft dynamic shared v4allocation part 1
+
+* implements IPv4 port params
+* lacks export into environment variable
+---
+ networking/udhcp/Config.src |  9 +++++++++
+ networking/udhcp/common.c   |  6 ++++++
+ networking/udhcp/common.h   | 11 +++++++++++
+ networking/udhcp/dhcpc.c    | 38 ++++++++++++++++++++++++++++++++++++--
+ networking/udhcp/dhcpc.h    |  1 +
+ 5 files changed, 63 insertions(+), 2 deletions(-)
+
+diff --git a/networking/udhcp/Config.src b/networking/udhcp/Config.src
+index bc32164..bc70410 100644
+--- a/networking/udhcp/Config.src
++++ b/networking/udhcp/Config.src
+@@ -150,3 +150,12 @@ config FEATURE_DHCP4o6C
+ 	  However, to activate this mechanism flag -6 must be used when
+ 	  starting udhcpc.
+ 
++config FEATURE_V4_PORTPARAMS
++	bool "Dynamic Shared IPv4 Allocation port range"
++	default y
++	depends on UDHCPC
++	help
++	  Include Draft Dynamic Shared IPv4 Allocation PORTPARAMS option.
++	  PORTPARAMS determine the port set a client is allowed to use within
++	  a shared v4 address environment.
++
+diff --git a/networking/udhcp/common.c b/networking/udhcp/common.c
+index 9e5b830..f01d793 100644
+--- a/networking/udhcp/common.c
++++ b/networking/udhcp/common.c
+@@ -67,6 +67,9 @@ const struct dhcp_optflag dhcp_optflags[] = {
+ 	{ OPTION_6RD                              , DHCP_6RD },
+ 	{ OPTION_U16                              , DHCP_PORT_RANGE_MIN },
+ 	{ OPTION_U16                              , DHCP_PORT_RANGE_MAX },
++#if ENABLE_FEATURE_V4_PORTPARAMS
++	{ OPTION_U32                 | OPTION_REQ , DHCP_V4_PORTPARAMS },
++#endif
+ 	{ OPTION_STATIC_ROUTES | OPTION_LIST      , DHCP_MS_STATIC_ROUTES },
+ 	{ OPTION_STRING                           , DHCP_WPAD },
+ 
+@@ -137,6 +140,9 @@ const char dhcp_option_strings[] ALIGN1 =
+ 	"ip6rd" "\0"       /* DHCP_6RD            */
+ 	"port_range_min" "\0" /* DHCP_PORT_RANGE_MIN */
+ 	"port_range_max" "\0" /* DHCP_PORT_RANGE_MAX */
++#if ENABLE_FEATURE_V4_PORTPARAMS
++	"port_params" "\0" /* DHCP_V4_PORTPARAMS */
++#endif
+ 	"msstaticroutes""\0"/* DHCP_MS_STATIC_ROUTES */
+ 	"wpad" "\0"        /* DHCP_WPAD           */
+ 	;
+diff --git a/networking/udhcp/common.h b/networking/udhcp/common.h
+index e7bde38..22128f5 100644
+--- a/networking/udhcp/common.h
++++ b/networking/udhcp/common.h
+@@ -155,6 +155,7 @@ enum {
+ #define DHCP_6RD                0xd4
+ #define DHCP_PORT_RANGE_MIN     0xf0
+ #define DHCP_PORT_RANGE_MAX     0xf1
++#define DHCP_V4_PORTPARAMS      0xf2
+ #define DHCP_MS_STATIC_ROUTES   0xf9 /* Microsoft's pre-RFC 3442 code for 0x79? */
+ #define DHCP_WPAD               0xfc /* MSIE's Web Proxy Autodiscovery Protocol */
+ #define DHCP_END                0xff
+@@ -198,6 +199,16 @@ struct optionlength_bounds {
+ 	uint8_t max;
+ };
+ 
++#if ENABLE_FEATURE_V4_PORTPARAMS
++
++struct v4_portparams {
++	uint8_t offset;
++	uint8_t psid_len;
++	uint16_t psid;
++} PACKED;
++
++#endif
++
+ extern const struct optionlength_bounds dhcp_option_lengths[];
+ 
+ unsigned FAST_FUNC udhcp_option_idx(const char *name);
+diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
+index 9bd5f9f..ee6de5b 100644
+--- a/networking/udhcp/dhcpc.c
++++ b/networking/udhcp/dhcpc.c
+@@ -628,6 +628,21 @@ static void add_client_options(struct dhcp_packet *packet)
+ 		udhcp_add_binary_option(packet, client_config.hostname);
+ 	if (client_config.fqdn)
+ 		udhcp_add_binary_option(packet, client_config.fqdn);
++#if ENABLE_FEATURE_V4_PORTPARAMS
++	if (client_config.portparams.psid_len != 0) {
++		struct v4_portparams portparams;
++		uint8_t data[6];
++
++		memcpy(&portparams, &client_config.portparams, 4);
++		portparams.psid = htons(portparams.psid);
++
++		data[0] = DHCP_V4_PORTPARAMS;
++		data[1] = 4;
++		memcpy(&data[2], &portparams, 4);
++
++		udhcp_add_binary_option(packet, data);
++	}
++#endif
+ 
+ 	/* Request broadcast replies if we have no IP addr */
+ 	if ((option_mask32 & OPT_B) && packet->ciaddr == 0)
+@@ -1279,7 +1294,7 @@ static void client_background(void)
+ int udhcpc_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
+ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ {
+-	uint8_t *message;
++	uint8_t *message, *portparams;
+ 	const char *str_V, *str_h, *str_F, *str_r;
+ 	IF_FEATURE_UDHCPC_ARPING(const char *str_a = "2000";)
+ 	IF_FEATURE_UDHCP_PORT(char *str_P;)
+@@ -1437,6 +1452,10 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 	}
+ #endif
+ 
++#if ENABLE_FEATURE_V4_PORTPARAMS
++	client_config.portparams = (struct v4_portparams) { 0, 0, 0 };
++#endif
++
+ 	/* Make sure fd 0,1,2 are open */
+ 	bb_sanitize_stdio();
+ 	/* Equivalent of doing a fflush after every \n */
+@@ -1717,6 +1736,21 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 			continue;
+ 		}
+ 
++#if ENABLE_FEATURE_V4_PORTPARAMS
++		portparams = opthash_lookup_simple(DHCP_V4_PORTPARAMS, &opt_len);
++		if (portparams) {
++			if (opt_len == 4) {
++				memcpy(&client_config.portparams, portparams, 4);
++				client_config.portparams.psid = ntohs(client_config.portparams.psid);
++			} else {
++				bb_error_msg("port params size mismatch");
++			}
++
++			if(client_config.portparams.psid_len == 0)
++				client_config.portparams = (struct v4_portparams) { 0, 0, 0 };
++		}
++#endif
++
+ 		switch (state) {
+ 		case INIT_SELECTING:
+ 			/* Must be a DHCPOFFER */
+@@ -1789,7 +1823,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 						lease_seconds = 0x0fffffff;
+ 				}
+ #if ENABLE_FEATURE_UDHCPC_ARPING
+-				if (opt & OPT_a) {
++				if ((opt & OPT_a) && client_config.portparams.psid_len == 0) {
+ /* RFC 2131 3.1 paragraph 5:
+  * "The client receives the DHCPACK message with configuration
+  * parameters. The client SHOULD perform a final check on the
+diff --git a/networking/udhcp/dhcpc.h b/networking/udhcp/dhcpc.h
+index 2ed1496..9067a1b 100644
+--- a/networking/udhcp/dhcpc.h
++++ b/networking/udhcp/dhcpc.h
+@@ -22,6 +22,7 @@ struct client_config_t {
+ 	uint8_t *fqdn;                  /* Optional fully qualified domain name to use */
+ 
+ 	IF_FEATURE_DHCP4o6C(int mode4o6; /* DHCPv4 over DHCPv6 mode */)
++	IF_FEATURE_V4_PORTPARAMS(struct v4_portparams portparams;)
+ 
+ 	uint16_t first_secs;
+ 	uint16_t last_secs;
+-- 
+2.1.3
+
