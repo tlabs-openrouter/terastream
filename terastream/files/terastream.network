@@ -140,6 +140,7 @@ setup_iptv() {
     uci set firewall.@zone[0].network='lan lan_iptv'
 
     # Allow UDP for MLD
+    uci -q add firewall rule
     uci set firewall.@rule[-1].name='Allow-MLD-UDP'
     uci set firewall.@rule[-1].src='wan'
     uci set firewall.@rule[-1].src_ip='::/0'
@@ -147,6 +148,10 @@ setup_iptv() {
     uci set firewall.@rule[-1].proto='udp'
     uci set firewall.@rule[-1].family='ipv6'
     uci set firewall.@rule[-1].target='ACCEPT'
+
+    # allow MDL reports
+    icmprule="$(uci_find_by_name firewall rule Allow-ICMPv6-Input)"
+    [ -n "$icmprule" ] && uci -q add_list firewall.@rule[$icmprule].icmp_type=130
 
     # add lan<->lan forwarding
     # needed for in-kernel multicasting forwarding
@@ -179,6 +184,11 @@ unsetup_terastream() {
     uci_delete_by_name firewall include "filter_input_terastream"
     uci_delete_by_name firewall forwarding Allow-lan-lan
     uci_delete_by_name firewall rule Allow-MLD-UDP
+
+    # disallow MDL reports
+    icmprule="$(uci_find_by_name firewall rule Allow-ICMPv6-Input)"
+    [ -n "$icmprule" ] && uci -q del_list firewall.@rule[$icmprule].icmp_type=130
+
     uci set firewall.@zone[0].network='lan'
     uci set firewall.@zone[1].network='wan'
 
