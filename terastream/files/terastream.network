@@ -8,7 +8,7 @@ delete_all_switch_vlans() {
 setup_terastream() {
     wan_eth=$(get_wanif)
     [ -z "$wan_eth" ] && {
-        logger -t terastream "$0: Can't find wan interface name!" \
+        logger -s -t terastream "$0: Can't find wan interface name!" \
         "Skipping network config."
         exit 0
     }
@@ -115,7 +115,7 @@ setup_iptv() {
     uci -q delete network.lan_iptv
     local iptv_iface=$(get_iptvif)
     [ -z "$iptv_iface" ] && {
-        logger -t terastream "$0: No iptv interface configured." \
+        logger -s -t terastream "$0: No iptv interface configured." \
             "Skipping IPTV config."
             return
     }
