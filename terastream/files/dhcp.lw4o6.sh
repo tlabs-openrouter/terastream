@@ -58,6 +58,38 @@ EOF
 chmod a+x "$rulefile"
 }
 
+portparams_to_ranges() {
+	[ -z "${port_params}" ] && return
+	
+	local offset="$(echo -n ${port_params} | cut -d ',' -f 1)"
+	local psid_len="$(echo -n ${port_params} | cut -d ',' -f 2)"
+	local psid="$(echo -n ${port_params} | cut -d ',' -f 3)"
+	
+	[ "${offset}" -ne "0" ] && {
+		logger -t $config "PSID offset needs to be 0 in Lightweight 4over6"
+		return
+	}
+	
+	local psid_bin=$(echo "obase=2;${psid}" | bc)
+	psid_bin=$(echo -n "0000000000000000${psid_bin}")
+	local padded_len=$(echo -n "${psid_bin}" | wc -c)
+	psid_bin=$(echo -n "${psid_bin}" | cut -b "$((padded_len - ${psid_len} + 1))-${padded_len}")
+	
+	local psid_bin_low="${psid_bin}0000000000000000"
+	local portset_start=$(echo -n "${psid_bin_low}" | cut -b 1-16)
+	
+	local psid_bin_high="${psid_bin}1111111111111111"
+	local portset_end=$(echo -n "${psid_bin_high}" | cut -b 1-16)
+	
+	port_range_min=$(echo "ibase=2;${portset_start}" | bc)
+	port_range_max=$(echo "ibase=2;${portset_end}" | bc)
+}
+
+[ -n "${port_params}" ] && {
+	logger -t $config "using port params ${port_params}"
+	portparams_to_ranges
+}
+
 [ -z "${port_range_min}" -o "${port_range_min}" = "0" ] && port_range_min="1"
 [ -z "${port_range_max}" -o "${port_range_max}" = "0" ] && port_range_max="65535"
 
