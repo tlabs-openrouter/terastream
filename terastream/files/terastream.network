@@ -151,7 +151,7 @@ setup_iptv() {
 
     # allow MDL reports
     icmprule="$(uci_find_by_name firewall rule Allow-ICMPv6-Input)"
-    [ -n "$icmprule" ] && uci -q add_list firewall.@rule[$icmprule].icmp_type=130
+    [ -n "$icmprule" ] && uci -q add_list firewall.@rule[$icmprule].icmp_type='130/0'
 
     # add lan<->lan forwarding
     # needed for in-kernel multicasting forwarding
