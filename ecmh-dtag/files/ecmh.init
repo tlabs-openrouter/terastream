@@ -1,16 +1,18 @@
 #!/bin/sh /etc/rc.common
-# Copyright (C) 2012 OpenWrt.org
+# Copyright (C) 2015 T-Labs
+#
+# Author: Kaspar Schleiser <kaspar@schleiser.de>
 
 START=90
-
-NAME=ecmh
-PROG=/usr/sbin/ecmh
-
-SERVICE_DAEMONIZE=1
-SERVICE_WRITE_PID=1
+USE_PROCD=1
 SERVICE_NICENESS=-3
 
-ecmh_start() {
+start_service() {
+	config_load ecmh
+	config_foreach start_ecmh_instance ecmh
+}
+
+start_ecmh_instance() {
 	local section="$1"
 	local upstream
 	local up_dev
@@ -22,19 +24,16 @@ ecmh_start() {
 	up_dev=$(uci_get_state network $upstream ifname $upstream)
 	down_dev=$(uci_get_state network $downstream ifname $downstream)
 
-	service_start $PROG -k -f -i $up_dev -d $down_dev
+	procd_open_instance
+	procd_set_param command /usr/sbin/ecmh -k -f -i $up_dev -d $down_dev
+	procd_set_param respawn
+
+	procd_open_trigger
+	procd_add_reload_trigger "ecmh"
+	procd_add_reload_interface_trigger "$up_dev"
+	procd_add_reload_interface_trigger "$down_dev"
+	procd_close_trigger
+
+	procd_close_instance
 }
 
-boot() {
-	config_load "${NAME}"
-	config_foreach ecmh_start ecmh
-}
-
-start() {
-	config_load "${NAME}"
-	config_foreach ecmh_start ecmh
-}
-
-stop() {
-	service_stop $PROG
-}
