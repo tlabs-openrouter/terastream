@@ -9,12 +9,12 @@ boot() {
 	local dnsmasq_conffile=/tmp/dnsmasq.d/10-ip6-prefix.conf
 	mkdir -p $(dirname $dnsmasq_conffile)
 	echo "dhcp-range=::1,constructor:br-lan,ra-stateless" > $dnsmasq_conffile
-	echo "ra-param=br-lan,15" >> $dnsmasq_conffile
+	echo "ra-param=br-lan,15,90" >> $dnsmasq_conffile
 	
 	iptv_if="$(uci -q get network.lan_iptv.ifname)"
 	[ -n "$iptv_if" ] && {
 		echo "dhcp-range=::1,constructor:${iptv_if},ra-stateless" >> $dnsmasq_conffile
-		echo "ra-param=${iptv_if},15" >> $dnsmasq_conffile
+		echo "ra-param=${iptv_if},15,90" >> $dnsmasq_conffile
 	}
 
 	# choose ula address for DNS address in both RS and DHCP
