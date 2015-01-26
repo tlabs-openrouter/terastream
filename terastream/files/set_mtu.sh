@@ -23,7 +23,7 @@ lan_if=${lan_if:-$(get_ifname lan)}
 }
 
 wan_if="$(uci -q get openrouter.network.wan_if)"
-wan_if=${lan_if:-$(get_ifname wan)}
+wan_if=${wan_if:-$(get_ifname wan)}
 [ -z "${wan_if}" ] && {
 	echo "Error: WAN interface not configured. (openrouter.network.wan_if)."
 	exit 1
