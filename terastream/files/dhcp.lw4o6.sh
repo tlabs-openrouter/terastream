@@ -22,13 +22,13 @@ setup_nat() {
 		# bail out if something's missing
 		[ -n "$tunnel_if" -a -n "$to_source" ] || exit 0
 
-		[ -z "${port_range_min}" -o -z "${port_range_max}" ] || to_source="${to_source}:${port_range}"
-
-                # set uci config values for port range
-		uci -q set network.${config}.port_range_min="${port_range_min}"
-		uci -q set network.${config}.port_range_max="${port_range_max}"
+		[ "$without_portrange" -eq 0 ] && to_source="${to_source}:${port_range}"
 		
-		logger -t $config "Restricting ports on iface $INTERFACE to ${port_range}."
+		if [ "$without_portrange" -eq 0 ]; then 
+			logger -t $config "Restricting ports on iface $INTERFACE to ${port_range}."
+		else
+			logger -t $config "Not restricting ports on iface ${INTERFACE}."
+		fi
 		
 		local mychain="${config}_lw4o6"
 		local rulefile="$(_rulefilename $INTERFACE)"
@@ -40,9 +40,13 @@ target_chain="postrouting_rule"
 
 [ "\$ACTION" = "add" ] && {
 	iptables -w -t nat -N $mychain
-	iptables -w -t nat -I $mychain -o "$tunnel_if" -p tcp -j SNAT --to-source $to_source
-	iptables -w -t nat -I $mychain -o "$tunnel_if" -p udp -j SNAT --to-source $to_source
-	iptables -w -t nat -I $mychain -o "$tunnel_if" -p icmp -j SNAT --to-source $to_source
+	if [ "$without_portrange" -eq 0 ]; then
+		iptables -w -t nat -I $mychain -o "$tunnel_if" -p tcp -j SNAT --to-source $to_source
+		iptables -w -t nat -I $mychain -o "$tunnel_if" -p udp -j SNAT --to-source $to_source
+		iptables -w -t nat -I $mychain -o "$tunnel_if" -p icmp -j SNAT --to-source $to_source
+	else
+		iptables -w -t nat -I $mychain -o "$tunnel_if" -j SNAT --to-source $to_source
+	fi
 
 	iptables -w -t nat -I \$target_chain -j $mychain
 }
@@ -90,8 +94,10 @@ portparams_to_ranges() {
 	portparams_to_ranges
 }
 
-[ -z "${port_range_min}" -o "${port_range_min}" = "0" ] && port_range_min="1"
-[ -z "${port_range_max}" -o "${port_range_max}" = "0" ] && port_range_max="65535"
+without_portrange=0
+
+[ -z "${port_range_min}" -o "${port_range_min}" = "0" ] && without_portrange="1"
+[ -z "${port_range_max}" -o "${port_range_max}" = "0" ] && without_portrange="1"
 
 case "$1" in
 	get_opts)
