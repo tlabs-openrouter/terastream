@@ -1,5 +1,6 @@
 #!/bin/sh
 . /lib/functions.sh
+. /lib/functions/network.sh
 
 config=$2
 iface=$3
@@ -14,7 +15,7 @@ setup_nat() {
 		local to_source="$ip"
 
 		# get device name from logical interface name
-		[ -n "$tunnel_if" ] && tunnel_if="$(uci_get_state network $tunnel_if ifname)"
+		[ -n "$tunnel_if" ] && network_get_device tunnel_if $tunnel_if
 
 		# use same interface if no tunnel interface supplied
 		[ -z "$tunnel_if" ] && tunnel_if="$interface"
