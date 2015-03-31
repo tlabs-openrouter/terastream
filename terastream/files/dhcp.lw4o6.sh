@@ -23,6 +23,10 @@ setup_nat() {
 		# bail out if something's missing
 		[ -n "$tunnel_if" -a -n "$to_source" ] || exit 0
 
+		# set uci config values for port range
+		uci -q set network.${config}.port_range_min="${port_range_min}"
+		uci -q set network.${config}.port_range_max="${port_range_max}"
+
 		[ "$without_portrange" -eq 0 ] && to_source="${to_source}:${port_range}"
 		
 		if [ "$without_portrange" -eq 0 ]; then 
