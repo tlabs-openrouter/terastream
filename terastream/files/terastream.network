@@ -43,7 +43,7 @@ setup_terastream() {
     uci_add_to_list_if_absent dhcp.@dnsmasq[0].addnhosts /tmp/hosts.voip
     uci_add_to_list_if_absent "dhcp.@dnsmasq[0].rebind_domain" "cdn.ts.t-com.hr"
 
-    uci set network.wan_ds.proto='dslite'
+    uci set network.wan_ds.proto='dslite_terastream'
     uci set network.wan_ds.interface='wan'
     uci set network.wan_ds.opt_aftr_remote='aftr_remote'
     uci set network.wan_ds.opt_aftr_local='aftr_local'
