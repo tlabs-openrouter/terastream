@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=terastream
 PKG_VERSION:=$(PKG_FILE_NAME)
-PKG_RELEASE:=21
+PKG_RELEASE:=22
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(BUILD_VARIANT)
 
@@ -47,7 +47,7 @@ define Package/terastream/install
 	$(INSTALL_BIN) ./files/dhcp6_terastream.script $(1)/lib/netifd
 	$(INSTALL_BIN) ./files/dhcp6_terastream.sh $(1)/lib/netifd/proto
 	$(INSTALL_BIN) ./files/dhcpv4ov6.sh $(1)/lib/netifd/proto
-	$(INSTALL_BIN) ./files/dslite.sh $(1)/lib/netifd/proto
+	$(INSTALL_BIN) ./files/dslite.sh $(1)/lib/netifd/proto/dslite_terastream.sh
 
 	$(INSTALL_DIR) $(1)/etc/hotplug.d/firewall
 	$(INSTALL_BIN) ./files/firewall-hotplug-ifrules.sh $(1)/etc/hotplug.d/firewall/20-ifrules

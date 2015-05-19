@@ -6,7 +6,7 @@
 
 init_proto "$@"
 
-proto_dslite_init_config() {
+proto_dslite_terastream_init_config() {
 	no_device=1
 	available=0
 	proto_config_add_string "interface"
@@ -54,7 +54,7 @@ get_slaac() {
 	ip a l $device | grep -m1 -E "scope global .*dynamic" | cut -d' ' -f6 | cut -d/ -f1
 }
 
-proto_dslite_setup() {
+proto_dslite_terastream_setup() {
 	local config="$1"			# logical interface name
 	local link="$config-tun"	# physical tunnel interface
 
@@ -146,7 +146,7 @@ proto_dslite_setup() {
 	[ -n "$mtu" ] && ifconfig $link mtu $mtu
 }
 
-proto_dslite_teardown() {
+proto_dslite_terastream_teardown() {
 	local interface="$1"
 	logger -t dslite $interface down
 
@@ -156,4 +156,4 @@ proto_dslite_teardown() {
 	local wan_dev=$(uci -q get network.$config_if.ifname)
 }
 
-add_protocol dslite
+add_protocol dslite_terastream
