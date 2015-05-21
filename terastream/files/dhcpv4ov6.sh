@@ -18,6 +18,24 @@ proto_dhcpv4ov6_init_config() {
 	proto_config_add_string "iface6rd"
 }
 
+proto_dhcpv4ov6_mode_ops() {
+	local aftr_dhcp4o6_servers="$(uci_get_state network wan aftr_dhcp4o6_servers)"
+	[ -z "$aftr_dhcp4o6_servers" ] && {
+		logger -t $config "No DHCPv4o6 server address given. Won't start stateless dslite."
+		return 1
+	}
+
+	local server servers
+	for server in $aftr_dhcp4o6_servers; do
+		append servers "-6 $server"
+	done
+
+	local ia_b4="$(uci_get_state network wan aftr_local)"
+	local I=""
+	[ -n "$ia_b4" ] && I="-I $ia_b4"
+	echo "$servers $I"
+}
+
 proto_dhcpv4ov6_setup() {
 	local config="$1"
 	local iface="$2"
@@ -70,7 +88,7 @@ proto_dhcpv4ov6_setup() {
 
 	local mode_opts
 	[ -n "$mode" ] && {
-		mode_opts="$(/lib/netifd/dhcp.${mode}.sh get_opts $config $iface)"
+		mode_opts="$(proto_dhcpv4ov6_mode_ops)"
 		[ $? -ne 0 ] && { logger -t $config "ERROR: Unable to initialize DHCP mode $mode." ; exit 1 ; }
 	}
 	[ -n "$iface6rd" ] && proto_export "IFACE6RD=$iface6rd"
@@ -88,10 +106,11 @@ proto_dhcpv4ov6_setup() {
 
 	proto_export "INTERFACE=$config"
 	proto_export "ignoredns=$ignoredns"
+	proto_export "MODE=$mode"
 
 	proto_run_command "$config" $DHCP_CLIENT \
 		-p /var/run/$DHCP_CLIENT-$iface.pid \
-		-s /lib/netifd/dhcp.script \
+		-s /lib/netifd/dhcpv4ov6.script \
 		-f -i "$iface" \
 		${ipaddr:+-r $ipaddr} \
 		${hostname:+-H $hostname} \
@@ -104,7 +123,10 @@ proto_dhcpv4ov6_teardown() {
 
 	local mode
 	json_get_vars mode
-	[ -n "$mode" ] && /lib/netifd/dhcp.${mode}.sh teardown "$interface" "$ifname"
+
+	if [ "$mode" = "lw4o6" ]; then
+		rm -f -- "/tmp/firewall-hotplug/${interface}.sh"
+	fi
 
 	proto_kill_command "$interface"
 }
