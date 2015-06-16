@@ -11,12 +11,18 @@ _rulefilename() {
 
 setup_nat() {
 		local config="${INTERFACE}"
-		local tunnel_if="$(uci -q get network.${config}.dslite_tunnel)"
+		local tunnel_intf="$(uci -q get network.${config}.dslite_tunnel)"
 		local port_range="${port_range_min}-${port_range_max}"
 		local to_source="$ip"
 
 		# get device name from logical interface name
-		[ -n "$tunnel_if" ] && network_get_device tunnel_if $tunnel_if
+		[ -n "$tunnel_intf" ] && network_get_device tunnel_if $tunnel_intf
+
+		# try again in case of tunnel not setup yet
+		[ -z "$tunnel_intf" ] && {
+			sleep 3
+			network_get_device tunnel_if $tunnel_intf
+		}
 
 		# use same interface if no tunnel interface supplied
 		[ -z "$tunnel_if" ] && tunnel_if="$interface"
@@ -106,16 +112,20 @@ set_classless_routes() {
 
 setup_interface () {
 	proto_init_update "*" 1
+
 	proto_add_ipv4_address "$ip" "${subnet:-255.255.255.0}"
-	# TODO: apply $broadcast
 
-	for i in $router; do
-		proto_add_ipv4_route 0.0.0.0 0 "$i"
-	done
+	if [ -z "$AFTR_REMOTE" ]; then
+		# TODO: apply $broadcast
 
-	# CIDR STATIC ROUTES (rfc3442)
-	[ -n "$staticroutes" ] && set_classless_routes $staticroutes
-	[ -n "$msstaticroutes" ] && set_classless_routes $msstaticroutes
+		for i in $router; do
+			proto_add_ipv4_route 0.0.0.0 0 "$i"
+		done
+
+		# CIDR STATIC ROUTES (rfc3442)
+		[ -n "$staticroutes" ] && set_classless_routes $staticroutes
+		[ -n "$msstaticroutes" ] && set_classless_routes $msstaticroutes
+	fi
 
 	for dns in $dns; do
 		proto_add_dns_server "$dns"
@@ -128,11 +138,34 @@ setup_interface () {
 	[ -n "$ZONE" ] && json_add_string zone "$ZONE"
 	proto_close_data
 
-	if [ "$MODE" = "lw4o6" ]; then
-		setup_nat
-	fi
-
 	proto_send_update "$INTERFACE"
+
+	if [ "$MODE" = "lw4o6" ]; then
+		if [ -n "$AFTR_REMOTE" ]; then
+			json_init
+			json_add_string name "${TUNLINK}_4"
+			json_add_string proto "lw4o6l"
+			json_add_string ipaddr "$ip"
+			json_add_string ip6addr "$AFTR_LOCAL"
+			json_add_string peeraddr "$AFTR_REMOTE"
+			json_add_string tunlink "$TUNLINK"
+
+			if [ "$without_portrange" = "1"  ]; then
+				json_add_int port_range_min "0"
+				json_add_int port_range_max "0"
+			else
+				json_add_int port_range_min "$port_range_min"
+				json_add_int port_range_max "$port_range_max"
+			fi
+
+			json_add_int mtu 1500
+			json_add_boolean delegate "0"
+			json_close_object
+			ubus call network add_dynamic "$(json_dump)"
+		else
+			setup_nat
+		fi
+	fi
 
 
 	if [ "$IFACE6RD" != 0 -a -n "$ip6rd" ]; then
@@ -174,6 +207,7 @@ setup_interface () {
 deconfig_interface() {
 	proto_init_update "*" 0
 	proto_send_update "$INTERFACE"
+	[ -n "$TUNLINK" ] && ifdown "${TUNLINK}_4"
 }
 
 [ -n "${port_params}" ] && {

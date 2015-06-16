@@ -1,10 +1,14 @@
 #!/bin/sh
 
 . /lib/functions.sh
+. /lib/functions/network.sh
+
 . ../netifd-proto.sh
 init_proto "$@"
 
 proto_dhcpv4ov6_init_config() {
+	available=1
+
 	proto_config_add_string "ipaddr"
 	proto_config_add_string "netmask"
 	proto_config_add_string "hostname"
@@ -16,39 +20,35 @@ proto_dhcpv4ov6_init_config() {
 	proto_config_add_string "mode"
 	proto_config_add_boolean "ignoredns"
 	proto_config_add_string "iface6rd"
-}
 
-proto_dhcpv4ov6_mode_ops() {
-	local aftr_dhcp4o6_servers="$(uci_get_state network wan aftr_dhcp4o6_servers)"
-	[ -z "$aftr_dhcp4o6_servers" ] && {
-		logger -t $config "No DHCPv4o6 server address given. Won't start stateless dslite."
-		return 1
-	}
-
-	local server servers
-	for server in $aftr_dhcp4o6_servers; do
-		append servers "-6 $server"
-	done
-
-	local ia_b4="$(uci_get_state network wan aftr_local)"
-	local I=""
-	[ -n "$ia_b4" ] && I="-I $ia_b4"
-	echo "$servers $I"
+	proto_config_add_string "aftr_local"
+	proto_config_add_string "aftr_remote"
+	proto_config_add_string "dhcp_mode"
+	proto_config_add_string "dhcp_servers"
 }
 
 proto_dhcpv4ov6_setup() {
 	local config="$1"
 	local iface="$2"
+	local ia_b4
 
-	proto_add_host_dependency $config "0.0.0.0"
+	proto_add_host_dependency "$config" ::
 
-	local ipaddr hostname clientid vendorid broadcast reqopts nodefaultopts mode ignoredns iface6rd
-	json_get_vars ipaddr hostname clientid vendorid broadcast reqopts nodefaultopts mode ignoredns iface6rd
+	local ipaddr hostname clientid vendorid broadcast reqopts nodefaultopts mode ignoredns iface6rd aftr_local aftr_remote dhcp_mode dhcp_servers tunlink
+	json_get_vars ipaddr hostname clientid vendorid broadcast reqopts nodefaultopts mode ignoredns iface6rd aftr_local aftr_remote dhcp_mode dhcp_servers tunlink
 
 	local opt dhcpopts
 	for opt in $reqopts; do
 		append dhcpopts "-O $opt"
 	done
+
+	if [ -n "mode" ]; then
+		if [ -n "$dhcp_servers" ]; then
+			ia_b4="$aftr_local"
+		else
+			ia_b4="$(uci_get_state network wan aftr_local)"
+		fi
+	fi
 
 	[ "$broadcast" = 1 ] && broadcast="-B" || broadcast=
 	
@@ -67,8 +67,6 @@ proto_dhcpv4ov6_setup() {
 		if [ $dhcpv6_duid_len -gt 19 ]; then
 			clientid="-x 0x3d:ff00000000${dhcpv6_duid}"
 		else
-			local ia_b4="$(uci_get_state network wan aftr_local)"
-			
 			if [ -z "$ia_b4" ]; then
 				clientid="-C"
 			else
@@ -87,13 +85,31 @@ proto_dhcpv4ov6_setup() {
 	[ "$nodefaultopts" = 1 ] && nodefaultopts="-o" || nodefaultopts=
 
 	local mode_opts
-	[ -n "$mode" ] && {
-		mode_opts="$(proto_dhcpv4ov6_mode_ops)"
-		[ $? -ne 0 ] && { logger -t $config "ERROR: Unable to initialize DHCP mode $mode." ; exit 1 ; }
-	}
+	if [ -n "mode" ]; then
+		local aftr_dhcp4o6_servers server
+
+		if [ -n "$dhcp_servers" ]; then
+			aftr_dhcp4o6_servers="$dhcp_servers"
+		else
+			aftr_dhcp4o6_servers="$(uci_get_state network wan aftr_dhcp4o6_servers)"
+		fi
+
+		for server in $aftr_dhcp4o6_servers; do
+			append mode_opts "-6 $server"
+		done
+
+		append mode_opts "-I $ia_b4"
+	fi
+
 	[ -n "$iface6rd" ] && proto_export "IFACE6RD=$iface6rd"
 
-	local dhcp4o6_mode="$(uci_get_state network wan aftr_dhcp4o6_mode)"
+	local dhcp4o6_mode
+	if [ -n "$dhcp_mode" ]; then
+		dhcp4o6_mode=$dhcp_mode
+	else
+		dhcp4o6_mode="$(uci_get_state network wan aftr_dhcp4o6_mode)"
+	fi
+
 	local DHCP_CLIENT
 	if [ "$dhcp4o6_mode" = "rfc7341" ]; then
 		DHCP_CLIENT="udhcpv4ov6"
@@ -107,6 +123,16 @@ proto_dhcpv4ov6_setup() {
 	proto_export "INTERFACE=$config"
 	proto_export "ignoredns=$ignoredns"
 	proto_export "MODE=$mode"
+	proto_export "TUNLINK=$tunlink"
+
+	logger -t "$cfg" "dhcp_servers: $dhcpservers"
+	logger -t "$cfg" "AFTR_LOCAL=$aftr_local"
+	logger -t "$cfg" "AFTR_REMOTE=$aftr_remote"
+
+	if [ -n "$dhcp_servers" ]; then
+		proto_export "AFTR_LOCAL=$aftr_local"
+		proto_export "AFTR_REMOTE=$aftr_remote"
+	fi
 
 	proto_run_command "$config" $DHCP_CLIENT \
 		-p /var/run/$DHCP_CLIENT-$iface.pid \
@@ -121,11 +147,11 @@ proto_dhcpv4ov6_setup() {
 proto_dhcpv4ov6_teardown() {
 	local interface="$1"
 
-	local mode
-	json_get_vars mode
+	local mode tunlink
+	json_get_vars mode tunlink
 
 	if [ "$mode" = "lw4o6" ]; then
-		rm -f -- "/tmp/firewall-hotplug/${interface}.sh"
+		[ -n "$tunlink" ] || rm -f -- "/tmp/firewall-hotplug/${interface}.sh"
 	fi
 
 	proto_kill_command "$interface"
