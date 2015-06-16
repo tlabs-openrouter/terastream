@@ -1,0 +1,233 @@
+# setup_network profile for terastream HR
+
+delete_all_switch_vlans() {
+ vlans="$(uci -q show network | grep 'network.@switch_vlan\[' | cut -d[ -f 2 | cut -d] -f 1 | uniq)"
+ for i in $vlans; do uci del network.@switch_vlan\[0\]; done
+}
+
+setup_terastream() {
+    wan_eth=$(get_wanif)
+    [ -z "$wan_eth" ] && {
+        logger -s -t terastream "$0: Can't find wan interface name!" \
+        "Skipping network config."
+        exit 0
+    }
+
+    mtu_wan=9000
+    mtu_lan=1500
+
+    uci -q delete network.wan
+    uci -q delete network.wan_ds
+    uci -q delete network.wan4
+
+    uci set network.wan='interface'
+    uci set network.wan_ds='interface'
+    uci set network.wan4='interface'
+
+    # uci set network.wan.proto='dhcp6_terastream'
+    uci set network.wan.proto='terastream'
+
+    uci set network.wan.ifname=$wan_eth
+
+    wan6=$(uci -q get network.wan6)
+
+    [ -z "$wan6" ] || uci delete network.wan6
+
+    uci set network.wan.accept_ra='1'
+    uci set network.wan.request_pd='3'
+    uci set network.wan.aftr_v4_local='192.0.0.2'
+    uci set network.wan.aftr_v4_remote='192.0.0.1'
+    uci set network.wan.request_na=0
+    uci set network.wan.request_pd=3
+    uci set network.wan.reqopts='21,23,31,56,64,67,88,99,123,198,199'
+
+    uci_add_to_list_if_absent dhcp.@dnsmasq[0].addnhosts /tmp/hosts.voip
+    uci_add_to_list_if_absent "dhcp.@dnsmasq[0].rebind_domain" "cdn.ts.t-com.hr"
+
+    # uci set network.wan_ds.proto='dslite_terastream'
+    # uci set network.wan_ds.interface='wan'
+    # uci set network.wan_ds.opt_aftr_remote='aftr_remote'
+    # uci set network.wan_ds.opt_aftr_local='aftr_local'
+    # uci set network.wan_ds.opt_aftr_v4_remote='aftr_v4_remote'
+    # uci set network.wan_ds.opt_aftr_v4_local='aftr_v4_local'
+
+    # uci set network.wan4.ifname='@wan'
+    # uci set network.wan4.proto='dhcpv4ov6'
+    # uci set network.wan4.mode='lw4o6'
+    # uci set network.wan4.ignoredns='1'
+    # uci set network.wan4.dslite_tunnel='wan_ds'
+    # uci set network.wan4.reqopts='port_range_min port_range_max'
+
+    # uci set firewall.@zone[1].network='wan wan_ds iptv wan4'
+
+    # make sure dslite can bind udhcp to wan
+    uci -q set dhcp.@dnsmasq[0].nonwildcard=1
+    uci_add_to_list_if_absent dhcp.@dnsmasq[0].interface br-lan
+
+    # have lan clients set a lower mtu so 4in6 won't fragment
+    uci -q delete dhcp.lan.dhcp_option
+    uci add_list dhcp.lan.dhcp_option="option:mtu,$mtu_lan"
+
+    # set SNTP options for DHCPv[46] clients
+    uci -q delete dhcp.@dnsmasq[0].dhcp_option
+    uci add_list dhcp.@dnsmasq[0].dhcp_option='option:ntp-server,0.0.0.0'
+    uci add_list dhcp.@dnsmasq[0].dhcp_option='option6:sntp-server,[::]'
+
+    # make sure we set a /64 on the interface, needed by dnsmasq RA stuff
+    uci set network.lan.ip6assign='64'
+
+    # assign internet and ULA prefix to lan
+    uci_add_to_list_if_absent network.lan.ip6class 'local'
+    uci_add_to_list_if_absent network.lan.ip6class '5f414e59'
+
+    grep Comcerto -q /proc/cpuinfo && {
+        delete_all_switch_vlans
+
+        # remove port 4 (port 1 internally) from lan
+        uci add network switch_vlan
+        uci set network.@switch_vlan[-1].device='switch0'
+        uci set network.@switch_vlan[-1].vlan=1
+        uci set network.@switch_vlan[-1].ports='0t 2 3 4'
+
+        # add a new vlan with port 4
+        uci add network switch_vlan
+        uci set network.@switch_vlan[-1].device='switch0'
+        uci set network.@switch_vlan[-1].vlan=2
+        uci set network.@switch_vlan[-1].ports='0t 1'
+    }
+
+    grep ea4500 -q /tmp/sysinfo/board_name && {
+        delete_all_switch_vlans
+
+        # remove port 4 (port 1 internally) from lan
+        uci add network switch_vlan
+        uci set network.@switch_vlan[-1].device='switch0'
+        uci set network.@switch_vlan[-1].vlan=1
+        uci set network.@switch_vlan[-1].ports='0 1 2 5t'
+
+        # add a new vlan with port 4
+        uci add network switch_vlan
+        uci set network.@switch_vlan[-1].device='switch0'
+        uci set network.@switch_vlan[-1].vlan=2
+        uci set network.@switch_vlan[-1].ports='3 5t'
+
+        # re-add (untagged) vlan for wan port
+        uci add network switch_vlan
+        uci set network.@switch_vlan[-1].device='switch0'
+        uci set network.@switch_vlan[-1].vlan=7
+        uci set network.@switch_vlan[-1].ports='4 6'
+    }
+
+    setup_iptv
+
+    /usr/sbin/set_mtu.sh $mtu_wan "wan"
+    /usr/sbin/set_mtu.sh $mtu_lan "lan"
+
+    return 0
+
+    # setup terastream dynamic firewall include
+    grep -s -q '/etc/firewall.terastream' /etc/config/firewall ||
+        {
+            cfg=$(uci add firewall include)
+            [ -n "$cfg" ] && {
+                uci set firewall.$cfg.path="/etc/firewall.terastream"
+                uci set firewall.$cfg.name="filter_input_terastream"
+            }
+        }
+}
+
+setup_iptv() {
+    uci -q delete network.lan_iptv
+    local iptv_iface=$(get_iptvif)
+    [ -z "$iptv_iface" ] && {
+        logger -s -t terastream "$0: No iptv interface configured." \
+            "Skipping IPTV config."
+            return
+    }
+
+    # add a new interface for stbs
+    uci set network.lan_iptv='interface'
+    uci set network.lan_iptv.proto='static'
+    uci set network.lan_iptv.ifname=$iptv_iface
+
+    # add ipv4 default subnet
+    uci set network.lan_iptv.ipaddr='192.168.2.1'
+    uci set network.lan_iptv.netmask='255.255.255.0'
+
+    # assign all three prefixes to it
+    uci set network.lan_iptv.ip6assign='64'
+    uci add_list network.lan_iptv.ip6class='local'
+    uci add_list network.lan_iptv.ip6class='5f414e59'
+    uci add_list network.lan_iptv.ip6class='49505456'
+    uci add_list network.lan_iptv.ip6class='564f4950'
+
+    # add lan_iptv to lan zone
+    uci set firewall.@zone[0].network='lan lan_iptv'
+
+    # Allow UDP for MLD
+    uci -q add firewall rule
+    uci set firewall.@rule[-1].name='Allow-MLD-UDP'
+    uci set firewall.@rule[-1].src='wan'
+    uci set firewall.@rule[-1].src_ip='::/0'
+    uci set firewall.@rule[-1].dest_ip='ff30::/12'
+    uci set firewall.@rule[-1].proto='udp'
+    uci set firewall.@rule[-1].family='ipv6'
+    uci set firewall.@rule[-1].target='ACCEPT'
+
+    # allow MDL reports
+    icmprule="$(uci_find_by_name firewall rule Allow-ICMPv6-Input)"
+    [ -n "$icmprule" ] && uci -q add_list firewall.@rule[$icmprule].icmp_type='130/0'
+
+    # add lan<->lan forwarding
+    # needed for in-kernel multicasting forwarding
+    uci -q add firewall forwarding
+    uci set firewall.@forwarding[-1].src='lan'
+    uci set firewall.@forwarding[-1].dest='lan'
+    uci set firewall.@forwarding[-1].name='Allow-lan-lan'
+
+    # dhcp for iptv
+    uci_add_to_list_if_absent dhcp.@dnsmasq[0].interface $iptv_iface
+    uci set dhcp.lan_iptv=dhcp
+    uci set dhcp.lan_iptv.interface=lan_iptv
+    uci set dhcp.lan_iptv.start=100
+    uci set dhcp.lan_iptv.limit=150
+    uci set dhcp.lan_iptv.leasetime=12h
+
+    uci -q delete dhcp.lan_iptv.dhcp_option
+    uci add_list dhcp.lan_iptv.dhcp_option="option:mtu,$mtu_lan"
+
+    # setup mld proxying
+    uci set ecmh.@ecmh[0].downstream=lan_iptv
+}
+
+unsetup_terastream() {
+    uci -q delete network.wan_dslite
+    uci -q delete network.wan_ds
+    uci -q delete network.wan4
+    uci -q delete network.lan_iptv
+
+    uci_delete_by_name firewall include "filter_input_terastream"
+    uci_delete_by_name firewall forwarding Allow-lan-lan
+    uci_delete_by_name firewall rule Allow-MLD-UDP
+
+    # disallow MDL reports
+    icmprule="$(uci_find_by_name firewall rule Allow-ICMPv6-Input)"
+    [ -n "$icmprule" ] && uci -q del_list firewall.@rule[$icmprule].icmp_type=130
+
+    uci set firewall.@zone[0].network='lan'
+    uci set firewall.@zone[1].network='wan'
+
+    uci -q del dhcp.@dnsmasq[0].nonwildcard
+    uci -q del_list dhcp.@dnsmasq[0].interface=br-lan
+    uci -q del_list dhcp.@dnsmasq[0].addnhosts=/tmp/hosts.voip
+    uci -q del_list dhcp.@dnsmasq[0].rebind_domaini=cdn.ts.t-com.hr
+
+    # reset default vlan config
+    grep Comcerto -q /proc/cpuinfo && {
+        delete_all_switch_vlans
+        uci add network switch_vlan
+        uci set network.@switch_vlan[-1].device='switch0'
+        uci set network.@switch_vlan[-1].vlan=1
+        uci set network.@switch_vlan[0].ports='0t 1 2 3 4'
+    }
+}

@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=terastream
 PKG_VERSION:=$(PKG_FILE_NAME)
-PKG_RELEASE:=23
+PKG_RELEASE:=24
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(BUILD_VARIANT)
 
@@ -29,6 +29,7 @@ define Package/terastream
   DEPENDS+= +resolveip            # needed for resolving AFTR FQDN -> IP
   DEPENDS+= +lua                  # needed for decode_hostname
   DEPENDS+= +udhcpv4ov6
+  DEPENDS+= +ds-lite +map
 endef
 
 define Package/terastream/description
@@ -49,6 +50,10 @@ define Package/terastream/install
 	$(INSTALL_BIN) ./files/dhcpv4ov6.sh $(1)/lib/netifd/proto
 	$(INSTALL_BIN) ./files/dslite.sh $(1)/lib/netifd/proto/dslite_terastream.sh
 
+	$(INSTALL_BIN) ./files/lw4o6l.sh $(1)/lib/netifd/proto/
+	$(INSTALL_BIN) ./files/terastream.sh $(1)/lib/netifd/proto/
+	$(INSTALL_BIN) ./files/terastream.script $(1)/lib/netifd/
+
 	$(INSTALL_DIR) $(1)/etc/hotplug.d/firewall
 	$(INSTALL_BIN) ./files/firewall-hotplug-ifrules.sh $(1)/etc/hotplug.d/firewall/20-ifrules
 
@@ -57,6 +62,7 @@ define Package/terastream/install
 
 	$(INSTALL_DIR) $(1)/etc/profiles/network
 	$(INSTALL_DATA) ./files/terastream.network $(1)/etc/profiles/network/terastream
+	$(INSTALL_DATA) ./files/terastream_v2.network $(1)/etc/profiles/network/terastream_v2
 
 	$(INSTALL_DIR) $(1)/etc
 	$(INSTALL_DATA) ./files/firewall.terastream $(1)/etc/firewall.terastream
