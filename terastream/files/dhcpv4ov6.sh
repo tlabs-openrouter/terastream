@@ -125,10 +125,6 @@ proto_dhcpv4ov6_setup() {
 	proto_export "MODE=$mode"
 	proto_export "TUNLINK=$tunlink"
 
-	logger -t "$cfg" "dhcp_servers: $dhcpservers"
-	logger -t "$cfg" "AFTR_LOCAL=$aftr_local"
-	logger -t "$cfg" "AFTR_REMOTE=$aftr_remote"
-
 	if [ -n "$dhcp_servers" ]; then
 		proto_export "AFTR_LOCAL=$aftr_local"
 		proto_export "AFTR_REMOTE=$aftr_remote"
