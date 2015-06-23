@@ -95,8 +95,7 @@ proto_lw4o6l_setup() {
 	          json_add_string proto "$proto"
                   json_add_boolean connlimit_ports 1
                   json_add_string snat_ip "$ipaddr"
-                  # json_add_string snat_port "$portset"
-		  json_add_string snat_port "4096-8191"
+                  json_add_string snat_port "$portset"
 	        json_close_object
               done
 	    done
