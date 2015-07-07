@@ -100,6 +100,21 @@ setup_interface () {
 	[ -n "$CER" ] && json_add_string cer "$CER"
 	[ -n "$PASSTHRU" ] && json_add_string passthru "$PASSTHRU"
 	[ -n "$ZONE" ] && json_add_string zone "$ZONE"
+
+	local SNTP_SERVERS="$NTP_IP $NTP_FQDN $SNTP_IP"
+	if [ -n "$SNTP_SERVERS" ]; then
+		local server
+
+		json_add_array sntpservers
+		for server in $SNTP_SERVERS; do
+			json_add_string "" "$server"
+		done
+		json_close_array
+	fi
+
+	[ -n "$SIP_DOMAIN" ] && json_add_string "sipdomain" "$SIP_DOMAIN"
+	[ -n "$NCS" ] && json_add_string "_x_ncs" "$NCS"
+
 	proto_close_data
 
 	proto_send_update "$INTERFACE"
@@ -197,7 +212,25 @@ setup_interface () {
 	[ -n "$RA_REACHABLE" ] && [ "$RA_REACHABLE" -gt 0 ] && echo "$RA_REACHABLE" > /proc/sys/net/ipv6/neigh/$device/base_reachable_time_ms
 	[ -n "$RA_RETRANSMIT" ] && [ "$RA_RETRANSMIT" -gt 0 ] && echo "$RA_RETRANSMIT" > /proc/sys/net/ipv6/neigh/$device/retrans_time_ms
 
-	# TODO: $SNTP_IP $SIP_IP $SNTP_FQDN $SIP_DOMAIN
+	# TODO: move these to hotplug scripts
+	if [ -n "$SNTP_SERVERS" ]; then
+		local ntp_args="-l"
+
+		for sntp_server in $SNTP_SERVERS; do
+			ntp_args="$ntp_args -p $sntp_server"
+		done
+		killall -TERM ntpd 2>/dev/null
+		sleep 1
+
+		/usr/sbin/ntpd $ntp_args
+	fi
+
+	uci_set_state network $iface sip_domain "$sip_domain"
+
+	# asterisk-uci handles non-changes
+	/etc/init.d/asterisk-uci reload
+
+	# TODO: handle NCS
 }
 
 teardown_interface() {
