@@ -24,7 +24,8 @@ setup_terastream() {
     uci set network.wan_ds='interface'
     uci set network.wan4='interface'
 
-    uci set network.wan.proto='dhcp6_terastream'
+    # uci set network.wan.proto='dhcp6_terastream'
+    uci set network.wan.proto='terastream'
 
     uci set network.wan.ifname=$wan_eth
 
@@ -43,21 +44,21 @@ setup_terastream() {
     uci_add_to_list_if_absent dhcp.@dnsmasq[0].addnhosts /tmp/hosts.voip
     uci_add_to_list_if_absent "dhcp.@dnsmasq[0].rebind_domain" "cdn.ts.t-com.hr"
 
-    uci set network.wan_ds.proto='dslite_terastream'
-    uci set network.wan_ds.interface='wan'
-    uci set network.wan_ds.opt_aftr_remote='aftr_remote'
-    uci set network.wan_ds.opt_aftr_local='aftr_local'
-    uci set network.wan_ds.opt_aftr_v4_remote='aftr_v4_remote'
-    uci set network.wan_ds.opt_aftr_v4_local='aftr_v4_local'
+    # uci set network.wan_ds.proto='dslite_terastream'
+    # uci set network.wan_ds.interface='wan'
+    # uci set network.wan_ds.opt_aftr_remote='aftr_remote'
+    # uci set network.wan_ds.opt_aftr_local='aftr_local'
+    # uci set network.wan_ds.opt_aftr_v4_remote='aftr_v4_remote'
+    # uci set network.wan_ds.opt_aftr_v4_local='aftr_v4_local'
 
-    uci set network.wan4.ifname='@wan'
-    uci set network.wan4.proto='dhcpv4ov6'
-    uci set network.wan4.mode='lw4o6'
-    uci set network.wan4.ignoredns='1'
-    uci set network.wan4.dslite_tunnel='wan_ds'
-    uci set network.wan4.reqopts='port_range_min port_range_max'
+    # uci set network.wan4.ifname='@wan'
+    # uci set network.wan4.proto='dhcpv4ov6'
+    # uci set network.wan4.mode='lw4o6'
+    # uci set network.wan4.ignoredns='1'
+    # uci set network.wan4.dslite_tunnel='wan_ds'
+    # uci set network.wan4.reqopts='port_range_min port_range_max'
 
-    uci set firewall.@zone[1].network='wan wan_ds iptv wan4'
+    # uci set firewall.@zone[1].network='wan wan_ds iptv wan4'
 
     # make sure dslite can bind udhcp to wan
     uci -q set dhcp.@dnsmasq[0].nonwildcard=1
@@ -121,6 +122,8 @@ setup_terastream() {
 
     /usr/sbin/set_mtu.sh $mtu_wan "wan"
     /usr/sbin/set_mtu.sh $mtu_lan "lan"
+
+    return 0
 
     # setup terastream dynamic firewall include
     grep -s -q '/etc/firewall.terastream' /etc/config/firewall ||

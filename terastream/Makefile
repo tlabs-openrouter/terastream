@@ -62,7 +62,7 @@ define Package/terastream/install
 
 	$(INSTALL_DIR) $(1)/etc/profiles/network
 	$(INSTALL_DATA) ./files/terastream.network $(1)/etc/profiles/network/terastream
-	$(INSTALL_DATA) ./files/terastream_v2.network $(1)/etc/profiles/network/terastream_v2
+	$(INSTALL_DATA) ./files/terastream_legacy.network $(1)/etc/profiles/network/terastream_legacy
 
 	$(INSTALL_DIR) $(1)/etc
 	$(INSTALL_DATA) ./files/firewall.terastream $(1)/etc/firewall.terastream
