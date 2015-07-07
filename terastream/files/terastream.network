@@ -39,7 +39,7 @@ setup_terastream() {
     uci set network.wan.aftr_v4_remote='192.0.0.1'
     uci set network.wan.request_na=0
     uci set network.wan.request_pd=3
-    uci set network.wan.reqopts='21,23,31,56,64,67,88,99,123,198,199'
+    uci set network.wan.reqopts='21,23,31,56,64,67,88,96,99,123,198,199'
 
     uci_add_to_list_if_absent dhcp.@dnsmasq[0].addnhosts /tmp/hosts.voip
     uci_add_to_list_if_absent "dhcp.@dnsmasq[0].rebind_domain" "cdn.ts.t-com.hr"
