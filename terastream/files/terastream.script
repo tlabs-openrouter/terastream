@@ -224,19 +224,6 @@ setup_interface () {
 	[ -n "$RA_REACHABLE" ] && [ "$RA_REACHABLE" -gt 0 ] && echo "$RA_REACHABLE" > /proc/sys/net/ipv6/neigh/$device/base_reachable_time_ms
 	[ -n "$RA_RETRANSMIT" ] && [ "$RA_RETRANSMIT" -gt 0 ] && echo "$RA_RETRANSMIT" > /proc/sys/net/ipv6/neigh/$device/retrans_time_ms
 
-	# TODO: move these to hotplug scripts
-	if [ -n "$SNTP_SERVERS" ]; then
-		local ntp_args="-l"
-
-		for sntp_server in $SNTP_SERVERS; do
-			ntp_args="$ntp_args -p $sntp_server"
-		done
-		killall -TERM ntpd 2>/dev/null
-		sleep 1
-
-		/usr/sbin/ntpd $ntp_args
-	fi
-
 	uci_set_state network $iface sip_domain "$sip_domain"
 
 	# asterisk-uci handles non-changes

@@ -57,6 +57,9 @@ define Package/terastream/install
 	$(INSTALL_DIR) $(1)/etc/hotplug.d/firewall
 	$(INSTALL_BIN) ./files/firewall-hotplug-ifrules.sh $(1)/etc/hotplug.d/firewall/20-ifrules
 
+	$(INSTALL_DIR) $(1)/etc/hotplug.d/iface
+	$(INSTALL_BIN) ./files/ntpd.hotplug $(1)/etc/hotplug.d/iface/50-ntpd
+
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) ./files/decode_hostname.lua $(1)/usr/bin/decode_hostname
 
