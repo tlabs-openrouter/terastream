@@ -3,6 +3,18 @@
 . /lib/functions.sh
 . /lib/netifd/netifd-proto.sh
 
+host_address_from_prefix() {
+	local prefix=$1
+
+	[ -z "$prefix" ] && return 1
+
+	prefix="$(echo ${prefix} | ipv6calc --printuncompressed | cut -d ':' -f -7):1"
+
+	ipv6calc --in ipv6addr --out ipv6addr "$prefix"
+
+	return 0
+}
+
 setup_interface () {
 	local device="$1"
 	proto_init_update "*" 1
@@ -42,6 +54,15 @@ setup_interface () {
 		if [ -z "$RA_ADDRESSES" -a -z "$RA_ROUTES" -a \
 				-z "$RA_DNS" -a "$FAKE_ROUTES" = 1 ]; then
 			RA_ROUTES="::/0,$SERVER,$valid,4096"
+		fi
+
+		local iaid="${prefix#*,class=*}"
+		if [ "$iaid" = "564f4950" ]; then
+			local prefix_info="${prefix%%,*}"
+			local voip_address=$(host_address_from_prefix "${prefix_info%/*}")
+			if [ -n "$voip_address" ]; then
+				uci_set_state network $INTERFACE sip_bindaddr "$voip_address"
+			fi
 		fi
 	done
 
@@ -224,7 +245,7 @@ setup_interface () {
 	[ -n "$RA_REACHABLE" ] && [ "$RA_REACHABLE" -gt 0 ] && echo "$RA_REACHABLE" > /proc/sys/net/ipv6/neigh/$device/base_reachable_time_ms
 	[ -n "$RA_RETRANSMIT" ] && [ "$RA_RETRANSMIT" -gt 0 ] && echo "$RA_RETRANSMIT" > /proc/sys/net/ipv6/neigh/$device/retrans_time_ms
 
-	uci_set_state network $iface sip_domain "$sip_domain"
+	uci_set_state network $INTERFACE sip_domain "$SIP_DOMAIN"
 
 	# asterisk-uci handles non-changes
 	/etc/init.d/asterisk-uci reload
