@@ -1,0 +1,25 @@
+#!/bin/sh
+
+[ "$ACTION" = ifup -o "$ACTION" = ifupdate ] || exit 0
+[ "$ACTION" = ifupdate -a -z "$IFUPDATE_DATA" ] && exit 0
+[ "$INTERFACE" = wan ] || exit 0
+
+. /usr/share/libubox/jshn.sh
+
+json_load "$(ifstatus wan)"
+
+json_select "data"
+json_select "sntpservers"
+json_get_values sntpservers
+
+if [ -n "$sntpservers" ]; then
+	local ntp_args="-l"
+
+	for sntp_server in $sntpservers; do
+		ntp_args="$ntp_args -p $sntp_server"
+	done
+	killall -TERM ntpd 2>/dev/null
+	sleep 3
+
+	/usr/sbin/ntpd $ntp_args
+fi
