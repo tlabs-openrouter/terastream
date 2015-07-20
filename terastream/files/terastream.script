@@ -115,10 +115,6 @@ setup_interface () {
 	[ -n "$SIP_DOMAIN" ] && json_add_string "sipdomain" "$SIP_DOMAIN"
 	[ -n "$NCS" ] && json_add_string "_x_ncs" "$NCS"
 
-	proto_close_data
-
-	proto_send_update "$INTERFACE"
-
 	MAPTYPE=""
 	MAPRULE=""
 
@@ -129,6 +125,22 @@ setup_interface () {
 	        DHCP4_O_DHCP6_SERVERS="$DHCP4_O_DHCP6_SERVERS_99"
 	        DHCP4_O_DHCP6_MODE="terastream"
 	fi
+
+	if [ -n "$DHCP4_O_DHCP6_SERVERS" ]; then
+		local server
+
+		json_add_string "dhcp4o6mode" "$DHCP4_O_DHCP6_MODE"
+
+		json_add_array dhcp4o6servers
+		for server in $DHCP4_O_DHCP6_SERVERS; do
+			json_add_string "" "$server"
+		done
+		json_close_array
+	fi
+
+	proto_close_data
+
+	proto_send_update "$INTERFACE"
 
 	if [ -n "$MAPE" -a -f /lib/netifd/proto/map.sh ]; then
 		MAPTYPE="map-e"
