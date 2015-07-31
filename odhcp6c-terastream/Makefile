@@ -8,14 +8,14 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=odhcp6c-terastream
-PKG_VERSION:=2015-07-29
+PKG_VERSION:=2015-07-29.1
 PKG_RELEASE=$(PKG_SOURCE_VERSION)
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
 PKG_SOURCE_URL:=git@slowspeed.hopto.org:odhcp6c
 PKG_SOURCE_PROTO:=git
-PKG_SOURCE_VERSION:=fee6842bdf281aebb6495fefa8120d2df2ad3eed
+PKG_SOURCE_VERSION:=60d45a753dde5d0d34cd94c89b6a51eefb28a402
 PKG_MAINTAINER:=Kaspar Schleiser <kaspar@schleiser.de>
 
 include $(INCLUDE_DIR)/package.mk
