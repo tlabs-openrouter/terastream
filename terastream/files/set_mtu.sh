@@ -90,13 +90,6 @@ if [ "$set_wan_mtu" -eq 1 ]; then
 	uci set network.wan_mtu.proto="none"
 	uci set network.wan_mtu.ifname="$wan_if"
 	uci set network.wan_mtu.mtu="$mtu"
-
-	if [ "$mtu" -ge "1548" ]; then
-		echo "Limiting Lw4o6 MTU to 1500"
-		uci set network.wan_ds.mtu='1500'
-	else
-		uci -q del network.wan_ds.mtu
-	fi
 fi
 
 uci commit network
