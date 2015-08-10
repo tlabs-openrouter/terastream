@@ -30,7 +30,6 @@ define Package/terastream
   DEPENDS+= +lua                  # needed for decode_hostname
   DEPENDS+= +udhcpv4ov6
   DEPENDS+= +ds-lite +map
-  DEPENDS+= +PACKAGE_miniupnpd:miniupnpd
 endef
 
 define Package/terastream/description
