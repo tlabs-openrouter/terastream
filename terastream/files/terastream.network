@@ -123,10 +123,6 @@ setup_terastream() {
     /usr/sbin/set_mtu.sh $mtu_wan "wan"
     /usr/sbin/set_mtu.sh $mtu_lan "lan"
 
-    # setup miniupnpd upstream port
-    uci set upnpd.config.external_zone='wan'
-    uci commit upnpd
-
     return 0
 
     # setup terastream dynamic firewall include
