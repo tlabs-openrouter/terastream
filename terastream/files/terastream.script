@@ -254,7 +254,7 @@ setup_interface () {
 	uci_set_state network $INTERFACE sip_domain "$SIP_DOMAIN"
 
 	# asterisk-uci handles non-changes
-	/etc/init.d/asterisk-uci reload
+	[ -x /etc/init.d/asterisk-uci ] && /etc/init.d/asterisk-uci reload
 
 	# TODO: handle NCS
 }
