@@ -16,7 +16,7 @@ uci_add_to_list_if_absent() {
 # get device's default wan interface name from uci.
 # if unset, try previously set from /etc/config/network
 get_wanif() {
-    wan_eth=$(uci -q get openrouter.network.wan_if)
+    wan_eth=$(uci -q get profiles.network.wan_if)
     [ -z "$wan_eth" ] && wan_eth=$(uci -q get network.wan.ifname)
     echo $wan_eth
 }
@@ -24,7 +24,7 @@ get_wanif() {
 # get device's default iptv interface name from uci.
 # if unset, try previously set from /etc/config/network
 get_iptvif() {
-    iptv_if=$(uci -q get openrouter.network.iptv_if)
+    iptv_if=$(uci -q get profiles.network.iptv_if)
     [ -z "$iptv_if" ] && iptv_if=$(uci -q get network.lan_iptv.ifname)
     echo $iptv_if
 }
@@ -54,7 +54,7 @@ PROFILE=$1
     exit 1
 }
 
-old_mode=$(uci -q get openrouter.network.mode)
+old_mode=$(uci -q get profiles.network.mode)
 
 [ -n "$old_mode" -a -f "$PROFILE_DIR/$old_mode" ] && {
     echo "Unconfiguring profile ${old_mode}..."
@@ -65,7 +65,7 @@ old_mode=$(uci -q get openrouter.network.mode)
 
 echo "Configuring profile ${PROFILE}..."
 . $PROFILE_DIR/$PROFILE
-setup_$PROFILE && $(uci set openrouter.network.mode=$PROFILE)
+setup_$PROFILE && $(uci set profiles.network.mode=$PROFILE)
 
 uci commit
 

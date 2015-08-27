@@ -15,21 +15,21 @@ zone=$2
 set_wan_mtu=0
 set_lan_mtu=0
 
-lan_if="$(uci -q get openrouter.network.lan_if)"
+lan_if="$(uci -q get profiles.network.lan_if)"
 lan_if=${lan_if:-$(get_ifname lan)}
 [ -z "${lan_if}" ] && {
-	echo "Error: LAN interface not configured. (openrouter.network.lan_if)."
+	echo "Error: LAN interface not configured. (profiles.network.lan_if)."
 	exit 1
 }
 
-wan_if="$(uci -q get openrouter.network.wan_if)"
+wan_if="$(uci -q get profiles.network.wan_if)"
 wan_if=${wan_if:-$(get_ifname wan)}
 [ -z "${wan_if}" ] && {
-	echo "Error: WAN interface not configured. (openrouter.network.wan_if)."
+	echo "Error: WAN interface not configured. (profiles.network.wan_if)."
 	exit 1
 }
 
-max_mtu="$(uci -q get openrouter.network.max_mtu)"
+max_mtu="$(uci -q get profiles.network.max_mtu)"
 [ -z "${max_mtu}" ] && max_mtu=1500
 
 if [ "$mtu" -gt "$max_mtu" ]; then
