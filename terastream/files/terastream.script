@@ -21,6 +21,9 @@ setup_interface () {
 	local addrsig=""
 	proto_init_update "*" 1
 
+	# TODO: calculate this based on configured MTU
+	local sw_mtu=1500
+
 	# Merge RA-DNS
 	for radns in $RA_DNS; do
 		local duplicate=0
@@ -205,6 +208,7 @@ setup_interface () {
 		json_add_string _prefsig "$prefsig"
 		[ "$MAPTYPE" = lw4o6 ] && json_add_string _addrsig "$addrsig"
 		json_add_string tunlink "$INTERFACE"
+		json_add_string mtu "$sw_mtu"
 		[ -n "$ZONE_MAP" ] || ZONE_MAP=$ZONE
 		[ -n "$ZONE_MAP" ] && json_add_string zone "$ZONE_MAP"
 		[ -n "$IFACE_MAP_DELEGATE" ] && json_add_boolean delegate "$IFACE_MAP_DELEGATE"
@@ -215,6 +219,7 @@ setup_interface () {
 		json_add_string name "${INTERFACE}_d4o6"
 		json_add_string ifname "@$INTERFACE"
 		json_add_string tunlink "$INTERFACE"
+		json_add_string mtu "$sw_mtu"
 		json_add_string proto dhcpv4ov6
 		json_add_string mode lw4o6
 		json_add_string dhcp_mode "$DHCP4_O_DHCP6_MODE"
@@ -236,7 +241,7 @@ setup_interface () {
 		[ -n "$b4addr" ] && json_add_string ip6addr "$b4addr"
 		json_add_string peeraddr "$AFTR"
 		json_add_string tunlink "$INTERFACE"
-		json_add_string mtu 1500
+		json_add_string mtu "$sw_mtu"
 		[ -n "$ZONE_DSLITE" ] || ZONE_DSLITE=$ZONE
 		[ -n "$ZONE_DSLITE" ] && json_add_string zone "$ZONE_DSLITE"
 		[ -n "$IFACE_DSLITE_DELEGATE" ] && json_add_boolean delegate "$IFACE_DSLITE_DELEGATE"
