@@ -121,6 +121,29 @@ setup_terastream() {
             uci set network.@switch_vlan[-1].vlan=7
             uci set network.@switch_vlan[-1].ports='4 6'
             ;;
+
+        ap148| \
+        r7500)
+            delete_all_switch_vlans
+
+            # remove port 4 (port 1 internally) from lan
+            uci add network switch_vlan
+            uci set network.@switch_vlan[-1].device='switch0'
+            uci set network.@switch_vlan[-1].vlan=1
+            uci set network.@switch_vlan[-1].ports='6t 2 3 4'
+
+            # add a new vlan with port 4
+            uci add network switch_vlan
+            uci set network.@switch_vlan[-1].device='switch0'
+            uci set network.@switch_vlan[-1].vlan=2
+            uci set network.@switch_vlan[-1].ports='6t 1'
+
+            # re-add (untagged) vlan for wan port
+            uci add network switch_vlan
+            uci set network.@switch_vlan[-1].device='switch0'
+            uci set network.@switch_vlan[-1].vlan=7
+            uci set network.@switch_vlan[-1].ports='0t 5'
+            ;;
         *)
             ;;
     esac
