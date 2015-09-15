@@ -80,43 +80,50 @@ setup_terastream() {
     uci_add_to_list_if_absent network.lan.ip6class 'local'
     uci_add_to_list_if_absent network.lan.ip6class '5f414e59'
 
-    grep Comcerto -q /proc/cpuinfo && {
-        delete_all_switch_vlans
+    local board="$(cat /tmp/sysinfo/board_name)"
 
-        # remove port 4 (port 1 internally) from lan
-        uci add network switch_vlan
-        uci set network.@switch_vlan[-1].device='switch0'
-        uci set network.@switch_vlan[-1].vlan=1
-        uci set network.@switch_vlan[-1].ports='0t 2 3 4'
+    case "$board" in
+        rg200)
+            delete_all_switch_vlans
 
-        # add a new vlan with port 4
-        uci add network switch_vlan
-        uci set network.@switch_vlan[-1].device='switch0'
-        uci set network.@switch_vlan[-1].vlan=2
-        uci set network.@switch_vlan[-1].ports='0t 1'
-    }
+            # remove port 4 (port 1 internally) from lan
+            uci add network switch_vlan
+            uci set network.@switch_vlan[-1].device='switch0'
+            uci set network.@switch_vlan[-1].vlan=1
+            uci set network.@switch_vlan[-1].ports='0t 2 3 4'
 
-    grep ea4500 -q /tmp/sysinfo/board_name && {
-        delete_all_switch_vlans
+            # add a new vlan with port 4
+            uci add network switch_vlan
+            uci set network.@switch_vlan[-1].device='switch0'
+            uci set network.@switch_vlan[-1].vlan=2
+            uci set network.@switch_vlan[-1].ports='0t 1'
+            ;;
 
-        # remove port 4 (port 1 internally) from lan
-        uci add network switch_vlan
-        uci set network.@switch_vlan[-1].device='switch0'
-        uci set network.@switch_vlan[-1].vlan=1
-        uci set network.@switch_vlan[-1].ports='0 1 2 5t'
+   
+        ea4500)
+            delete_all_switch_vlans
 
-        # add a new vlan with port 4
-        uci add network switch_vlan
-        uci set network.@switch_vlan[-1].device='switch0'
-        uci set network.@switch_vlan[-1].vlan=2
-        uci set network.@switch_vlan[-1].ports='3 5t'
+            # remove port 4 (port 1 internally) from lan
+            uci add network switch_vlan
+            uci set network.@switch_vlan[-1].device='switch0'
+            uci set network.@switch_vlan[-1].vlan=1
+            uci set network.@switch_vlan[-1].ports='0 1 2 5t'
 
-        # re-add (untagged) vlan for wan port
-        uci add network switch_vlan
-        uci set network.@switch_vlan[-1].device='switch0'
-        uci set network.@switch_vlan[-1].vlan=7
-        uci set network.@switch_vlan[-1].ports='4 6'
-    }
+            # add a new vlan with port 4
+            uci add network switch_vlan
+            uci set network.@switch_vlan[-1].device='switch0'
+            uci set network.@switch_vlan[-1].vlan=2
+            uci set network.@switch_vlan[-1].ports='3 5t'
+
+            # re-add (untagged) vlan for wan port
+            uci add network switch_vlan
+            uci set network.@switch_vlan[-1].device='switch0'
+            uci set network.@switch_vlan[-1].vlan=7
+            uci set network.@switch_vlan[-1].ports='4 6'
+            ;;
+        *)
+            ;;
+    esac
 
     setup_iptv
 
