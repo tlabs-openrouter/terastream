@@ -29,9 +29,9 @@ start_ecmh_instance() {
 	procd_set_param respawn
 
 	procd_open_trigger
-	procd_add_reload_trigger "ecmh"
-	procd_add_reload_interface_trigger "$up_dev"
-	procd_add_reload_interface_trigger "$down_dev"
+		procd_add_config_trigger "config.change" "ecmh" /etc/init.d/ecmh reload
+		procd_add_interface_trigger "interface.*" "$up_dev" /etc/init.d/ecmh reload
+		procd_add_interface_trigger "interface.*" "$down_dev" /etc/init.d/ecmh reload
 	procd_close_trigger
 
 	procd_close_instance
