@@ -71,7 +71,10 @@ setup_terastream() {
     # set SNTP options for DHCPv[46] clients
     uci -q delete dhcp.@dnsmasq[0].dhcp_option
     uci add_list dhcp.@dnsmasq[0].dhcp_option='option:ntp-server,0.0.0.0'
-    uci add_list dhcp.@dnsmasq[0].dhcp_option='option6:sntp-server,[::]'
+
+    if [ ! -f /usr/sbin/odhcpd ]; then
+        uci add_list dhcp.@dnsmasq[0].dhcp_option='option6:sntp-server,[::]'
+    fi
 
     # make sure we set a /64 on the interface, needed by dnsmasq RA stuff
     uci set network.lan.ip6assign='64'
@@ -224,6 +227,12 @@ setup_iptv() {
 
     uci -q delete dhcp.lan_iptv.dhcp_option
     uci add_list dhcp.lan_iptv.dhcp_option="option:mtu,$mtu_lan"
+
+    if [ -f /usr/sbin/odhcpd ]; then
+        uci set dhcp.lan_iptv.sntp=1
+        uci set dhcp.lan_iptv.dhcpv6='server'
+        uci set dhcp.lan_iptv.ra='server'
+    fi
 
     # setup mld proxying
     uci set ecmh.@ecmh[0].downstream=lan_iptv
