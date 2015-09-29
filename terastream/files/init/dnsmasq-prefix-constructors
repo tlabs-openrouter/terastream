@@ -7,6 +7,11 @@ START=59
 
 boot() {
 	local dnsmasq_conffile=/tmp/dnsmasq.d/10-ip6-prefix.conf
+
+	if [ -f /usr/sbin/odhcpd ]; then
+		return 0
+	fi
+
 	mkdir -p $(dirname $dnsmasq_conffile)
 	echo "dhcp-range=::1,constructor:br-lan,ra-stateless" > $dnsmasq_conffile
 	echo "ra-param=br-lan,15,90" >> $dnsmasq_conffile
