@@ -31,6 +31,7 @@ define Package/terastream
   DEPENDS+= +udhcpv4ov6
   DEPENDS+= +ds-lite +map
   DEPENDS+= +logremote-terastream
+  DEPENDS+= +odhcpd
 endef
 
 define Package/terastream/description
