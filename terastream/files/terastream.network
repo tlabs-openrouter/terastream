@@ -83,7 +83,7 @@ setup_terastream() {
     local board="$(cat /tmp/sysinfo/board_name)"
 
     case "$board" in
-        rg200)
+        rg_rg200)
             delete_all_switch_vlans
 
             # remove port 4 (port 1 internally) from lan
@@ -99,7 +99,6 @@ setup_terastream() {
             uci set network.@switch_vlan[-1].ports='0t 1'
             ;;
 
-   
         ea4500)
             delete_all_switch_vlans
 
