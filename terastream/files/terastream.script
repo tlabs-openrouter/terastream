@@ -1,6 +1,7 @@
 #!/bin/sh
 [ -z "$2" ] && echo "Error: should be run by odhcpc6c" && exit 1
 . /lib/functions.sh
+. /lib/functions/network.sh
 . /lib/netifd/netifd-proto.sh
 
 host_address_from_prefix() {
@@ -234,6 +235,10 @@ setup_interface () {
 		ubus call network add_dynamic "$(json_dump)"
 	elif [ -n "$AFTR" -a "$IFACE_DSLITE" != 0 -a -f /lib/netifd/proto/dslite.sh ]; then
 		[ -z "$IFACE_DSLITE" -o "$IFACE_DSLITE" = 1 ] && IFACE_DSLITE=${INTERFACE}_4
+
+		# hackfix: clear network on errors, else netifd won't retry
+		network_is_up "$IFACE_DSLITE" || ifdown "$IFACE_DSLITE" > /dev/null
+
 		json_init
 		json_add_string name "$IFACE_DSLITE"
 		json_add_string ifname "@$INTERFACE"
