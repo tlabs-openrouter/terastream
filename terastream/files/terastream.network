@@ -83,7 +83,7 @@ setup_terastream() {
     local board="$(cat /tmp/sysinfo/board_name)"
 
     case "$board" in
-        rg_rg200)
+        rg_g200)
             delete_all_switch_vlans
 
             # remove port 4 (port 1 internally) from lan
