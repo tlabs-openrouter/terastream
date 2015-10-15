@@ -208,7 +208,7 @@ setup_iptv() {
     uci add_list network.lan_iptv.ip6class='564f4950'
 
     # add lan_iptv to lan zone
-    uci set firewall.@zone[0].network='lan lan_iptv'
+    uci add_list firewall.@zone[0].network='lan_iptv'
 
     # Allow UDP for MLD
     uci -q add firewall rule
