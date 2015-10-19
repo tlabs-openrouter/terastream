@@ -167,6 +167,16 @@ setup_interface () {
 		json_close_array
 	fi
 
+	if [ -n "$SYSLOG_COLLECTORS" ]; then
+		local server
+
+		json_add_array syslog_collectors
+		for server in $SYSLOG_COLLECTORS; do
+			json_add_string "" "$server"
+		done
+		json_close_array
+	fi
+
 	proto_close_data
 
 	proto_send_update "$INTERFACE"
