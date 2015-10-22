@@ -201,7 +201,7 @@ setup_interface () {
 		json_add_string "" "$b4addr"
 		json_close_array
 		json_close_object
-		ubus call network add_dynamic "$(json_dump)"
+		ubus -S call network add_dynamic "$(json_dump)"
 	fi
 
 
@@ -223,7 +223,7 @@ setup_interface () {
 		[ -n "$ZONE_MAP" ] && json_add_string zone "$ZONE_MAP"
 		[ -n "$IFACE_MAP_DELEGATE" ] && json_add_boolean delegate "$IFACE_MAP_DELEGATE"
 		json_close_object
-		ubus call network add_dynamic "$(json_dump)"
+		ubus -S call network add_dynamic "$(json_dump)"
 	elif [ -n "$DHCP4_O_DHCP6_SERVERS" -a -n "$b4addr" ]; then
 		json_init
 		json_add_string name "${INTERFACE}_d4o6"
@@ -241,7 +241,7 @@ setup_interface () {
 		[ -n "$b4addr" ] && json_add_string aftr_local "$b4addr"
 		json_add_string aftr_remote "$AFTR"
 		json_close_object
-		ubus call network add_dynamic "$(json_dump)"
+		ubus -S call network add_dynamic "$(json_dump)"
 	elif [ -n "$AFTR" -a "$IFACE_DSLITE" != 0 -a -f /lib/netifd/proto/dslite.sh ]; then
 		[ -z "$IFACE_DSLITE" -o "$IFACE_DSLITE" = 1 ] && IFACE_DSLITE=${INTERFACE}_4
 		json_init
@@ -256,7 +256,7 @@ setup_interface () {
 		[ -n "$ZONE_DSLITE" ] && json_add_string zone "$ZONE_DSLITE"
 		[ -n "$IFACE_DSLITE_DELEGATE" ] && json_add_boolean delegate "$IFACE_DSLITE_DELEGATE"
 		json_close_object
-		ubus call network add_dynamic "$(json_dump)"
+		ubus -S call network add_dynamic "$(json_dump)"
 	fi
 
 	# Apply IPv6 / ND configuration
