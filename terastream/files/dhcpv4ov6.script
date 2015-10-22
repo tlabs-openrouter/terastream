@@ -164,7 +164,7 @@ setup_interface () {
 			json_add_int mtu 1500
 			json_add_boolean delegate "0"
 			json_close_object
-			ubus call network add_dynamic "$(json_dump)"
+			ubus -S call network add_dynamic "$(json_dump)"
 		else
 			setup_nat
 		fi
@@ -197,7 +197,7 @@ setup_interface () {
 		[ -n "$ZONE6RD" ] && json_add_string zone "$ZONE6RD"
 		json_close_object
 
-		ubus call network add_dynamic "$(json_dump)"
+		ubus -S call network add_dynamic "$(json_dump)"
 	fi
 
 	# TODO
