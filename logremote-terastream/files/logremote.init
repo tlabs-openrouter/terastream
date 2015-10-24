@@ -16,23 +16,27 @@ LOG_PROTO="udp"
 LOG_TRAILER_NULL=0
 LOG_PREFIX=""
 
+_get_collector_addresses()
+{
+	json_init
+	json_load "$(ifstatus $INTERFACE)"
+
+	local collector_addresses
+
+	json_select data 2>/dev/null || return
+	json_select syslog_collectors 2>/dev/null || return
+	json_get_values collector_addresses
+
+	echo "$collector_addresses"
+}
+
 start_service_remote()
 {
 	PIDCOUNT="$(( ${PIDCOUNT} + 1))"
 	local pid_file="/var/run/logread.${PIDCOUNT}.pid"
 
-	json_init
-	json_load "$(ifstatus $INTERFACE)"
-
-	local collector_addresses collector_address
-
-	json_select data 2>/dev/null || return 0
-	json_select syslog_collectors 2>/dev/null || return 0
-	json_get_values collector_addresses
-
+	local collector_addresses="$(_get_collector_addresses)"
 	for collector_address in $collector_addresses; do
-		[ -z "${collector_address}" ] && return
-
 		/sbin/validate_data ip6addr "$collector_address" 2>/dev/null || continue
 
 		procd_open_instance
@@ -46,6 +50,19 @@ start_service_remote()
 	done
 }
 
+send_bootlog()
+{
+
+	[ -f /tmp/dmesgboot.log ] && {
+		local collector_addresses="$(_get_collector_addresses)"
+		for collector_address in $collector_addresses; do
+			logger -t bootlog -n ${collector_address} -f /tmp/dmesgboot.log
+		done
+
+		rm -f /tmp/dmesgboot.log
+	}
+}
+
 service_triggers()
 {
 	procd_add_reload_interface_trigger "$INTERFACE"
@@ -54,4 +71,5 @@ service_triggers()
 start_service()
 {
 	start_service_remote
+	send_bootlog
 }
