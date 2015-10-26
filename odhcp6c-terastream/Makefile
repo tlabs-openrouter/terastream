@@ -13,7 +13,7 @@ PKG_RELEASE=$(PKG_SOURCE_VERSION)
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE_URL:=git@slowspeed.hopto.org:odhcp6c
+PKG_SOURCE_URL:=git@github.com:tlabs-openrouter/odhcp6c.git
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_VERSION:=c234e800475a7226716dab39bf5c9954610d25cb
 PKG_MAINTAINER:=Kaspar Schleiser <kaspar@schleiser.de>
