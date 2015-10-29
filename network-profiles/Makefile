@@ -1,8 +1,12 @@
 #
 # Copyright (C) 2014 Deutsche Telekom AG
 #
-# Author: Kaspar Schleiser
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
 #
+# Author: Kaspar Schleiser <kaspar@schleiser.de>
+#
+
 include $(TOPDIR)/rules.mk
 PKG_NAME:=network-profiles
 PKG_VERSION:=0.1
