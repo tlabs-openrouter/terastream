@@ -1,4 +1,8 @@
 #
+# Copyright (C) 2015 T-Labs Deutsche Telekom Laboratories
+#
+# This is free software, licensed under the GNU General Public License v2.
+# See /LICENSE for more information.
 #
 
 include $(TOPDIR)/rules.mk
@@ -19,7 +23,7 @@ include $(INCLUDE_DIR)/package.mk
 define Package/ecmh-dtag
   SECTION:=utils
   CATEGORY:=Telekom
-  TITLE:=Easy Cast du Multi Hub
+  TITLE:=Easy Cast du Multi Hub, T-Labs version
   URL:=http://unfix.org/projects/ecmh/
 endef
 
