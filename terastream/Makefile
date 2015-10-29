@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2006-2012 OpenWrt.org
+# Copyright (C) 2013-2015 T-Labs
 #
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
