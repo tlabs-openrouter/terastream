@@ -18,6 +18,7 @@ PKG_SOURCE_URL:=git@github.com:tlabs-openrouter/odhcp6c.git
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_VERSION:=c234e800475a7226716dab39bf5c9954610d25cb
 PKG_MAINTAINER:=Kaspar Schleiser <kaspar@schleiser.de>
+PKG_LICENSE:=GPL-2.0
 
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
