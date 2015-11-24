@@ -11,6 +11,7 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=network-profiles
 PKG_VERSION:=0.1
 PKG_RELEASE:=1
+PKG_LICENSE:=GPL-2.0
 
 include $(INCLUDE_DIR)/package.mk
 

@@ -10,6 +10,7 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=logremote-terastream
 PKG_VERSION:=1.0
 PKG_RELEASE:=1
+PKG_LICENSE:=GPL-2.0
 
 include $(INCLUDE_DIR)/package.mk
 
