@@ -20,7 +20,7 @@ define Package/terastream
   CATEGORY:=Telekom
   TITLE:=Terastream
 
-  DEPENDS+= +dnsmasq-dhcpv6
+  DEPENDS+= +dnsmasq-full
   DEPENDS+= +kmod-ipv6
   DEPENDS+= +kmod-ip6-tunnel
   DEPENDS+= +ip
