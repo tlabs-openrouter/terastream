@@ -76,9 +76,6 @@ setup_terastream() {
         uci add_list dhcp.@dnsmasq[0].dhcp_option='option6:sntp-server,[::]'
     fi
 
-    # make sure we set a /64 on the interface, needed by dnsmasq RA stuff
-    uci set network.lan.ip6assign='64'
-
     # assign internet and ULA prefix to lan
     uci_add_to_list_if_absent network.lan.ip6class 'local'
     uci_add_to_list_if_absent network.lan.ip6class '5f414e59'
