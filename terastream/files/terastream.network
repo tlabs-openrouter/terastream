@@ -134,31 +134,33 @@ setup_terastream() {
     grep armada-385-linksys-caiman -q /tmp/sysinfo/board_name && {
         delete_all_switch_vlans
 
-        # add switch config                                
-        uci add network switch
-        uci set network.@switch[-1].name='switch0'
-        uci set network.@switch[-1].reset=1   
-        uci set network.@switch[-1].enable_vlan=1                        
+        # add switch config
+        uci -q get network.@switch[0].name || {
+                uci add network switch
+                uci set network.@switch[-1].name='switch0'
+                uci set network.@switch[-1].reset=1
+                uci set network.@switch[-1].enable_vlan=1
+        }
 
         # remove port 4 (port 1 internally) from lan
         uci add network switch_vlan
         uci set network.@switch_vlan[-1].device='switch0'
         uci set network.@switch_vlan[-1].vlan=1
-        uci set network.@switch_vlan[-1].ports='1 2 3 5t'
+        uci set network.@switch_vlan[-1].ports='1 2 3 6t'
 
         # add a new vlan with port 4
         uci add network switch_vlan
         uci set network.@switch_vlan[-1].device='switch0'
         uci set network.@switch_vlan[-1].vlan=2
-        uci set network.@switch_vlan[-1].ports='0 5t'
+        uci set network.@switch_vlan[-1].ports='0 6t'
 
         # re-add (untagged) vlan for wan port
         uci add network switch_vlan
         uci set network.@switch_vlan[-1].device='switch0'
         uci set network.@switch_vlan[-1].vlan=7
-        uci set network.@switch_vlan[-1].ports='4 6'
+        uci set network.@switch_vlan[-1].ports='4 5'
 
-        uci set network.lan.ifname=eth0.1
+        uci set network.lan.ifname=eth1.1
     }
 
     setup_iptv
