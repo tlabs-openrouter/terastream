@@ -67,61 +67,57 @@ setup_terastream() {
 
     local board="$(cat /tmp/sysinfo/board_name)"
 
+    local lan_ports lan_cpu_port iptv_port wan_port wan_cpu_port
+
     case "$board" in
         rg200)
-            delete_all_switch_vlans
-
-            # remove port 4 (port 1 internally) from lan
-            ucidef_add_switch_vlan 'switch0' '1' '0t 2 3 4'
-
-            # add a new vlan with port 4
-            ucidef_add_switch_vlan 'switch0' '2' '0t 1'
+            lan_cpu_port="0"
+            lan_ports="2 3 4"
+            iptv_port="1"
             ;;
-
    
         ea4500)
-            delete_all_switch_vlans
-
-            # remove port 4 (port 1 internally) from lan
-            ucidef_add_switch_vlan 'switch0' '1' '0 1 2 5t'
-
-            # add a new vlan with port 4
-            ucidef_add_switch_vlan 'switch0' '2' '3 5t'
-
-            # re-add (untagged) vlan for wan port
-            ucidef_add_switch_vlan 'switch0' '7' '4 6'
+            lan_cpu_port="5"
+            lan_ports="2 3 4"
+            iptv_port="1"
+            wan_cpu_port="6"
+            wan_port="4"
             ;;
 
         ap148| \
         r7500)
-            delete_all_switch_vlans
-
-            # remove port 4 (port 1 internally) from lan
-            ucidef_add_switch_vlan 'switch0' '1' '6t 2 3 4'
-
-            # add a new vlan with port 4
-            ucidef_add_switch_vlan 'switch0' '2' '6t 1'
-
-            # re-add (untagged) vlan for wan port
-            ucidef_add_switch_vlan 'switch0' '7' '0 5'
+            lan_cpu_port="6"
+            lan_ports="2 3 4"
+            iptv_port="1"
+            wan_cpu_port="0"
+            wan_port="5"
             ;;
 
         armada-385-linksys-caiman)
-            delete_all_switch_vlans
-
-            # remove port 4 (port 0 internally) from lan
-            ucidef_add_switch_vlan 'switch0' '1' '1 2 3 6t'
-
-            # add a new vlan with port 4
-            ucidef_add_switch_vlan 'switch0' '2' '0 6t'
-
-            # re-add (untagged) vlan for wan port
-            ucidef_add_switch_vlan 'switch0' '7' '4 5'
+            lan_cpu_port="6"
+            lan_ports="1 2 3"
+            iptv_port="0"
+            wan_cpu_port="5"
+            wan_port="4"
             ;;
 
         *)
             ;;
     esac
+
+    if [ -n "$lan_ports" ]; then
+        delete_all_switch_vlans
+
+        ucidef_add_switch_vlan "switch0" "1" "${lan_ports} ${lan_cpu_port}t"
+
+        if [ -n "$iptv_port" ]; then
+            ucidef_add_switch_vlan "switch0" "2" "${iptv_port} ${lan_cpu_port}t"
+        fi
+
+        if [ -n "$wan_port" ]; then
+            ucidef_add_switch_vlan "switch0" "7" "${wan_port} ${wan_cpu_port:-${lan_cpu_port}t}"
+        fi
+    fi
 
     setup_iptv
 
