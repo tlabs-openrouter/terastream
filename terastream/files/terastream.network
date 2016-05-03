@@ -6,6 +6,8 @@ delete_all_switch_vlans() {
 }
 
 setup_terastream() {
+    . /lib/functions/uci-defaults.sh
+
     wan_eth=$(get_wanif)
     [ -z "$wan_eth" ] && {
         logger -s -t terastream "$0: Can't find wan interface name!" \
@@ -70,16 +72,10 @@ setup_terastream() {
             delete_all_switch_vlans
 
             # remove port 4 (port 1 internally) from lan
-            uci add network switch_vlan
-            uci set network.@switch_vlan[-1].device='switch0'
-            uci set network.@switch_vlan[-1].vlan=1
-            uci set network.@switch_vlan[-1].ports='0t 2 3 4'
+            ucidef_add_switch_vlan 'switch0' '1' '0t 2 3 4'
 
             # add a new vlan with port 4
-            uci add network switch_vlan
-            uci set network.@switch_vlan[-1].device='switch0'
-            uci set network.@switch_vlan[-1].vlan=2
-            uci set network.@switch_vlan[-1].ports='0t 1'
+            ucidef_add_switch_vlan 'switch0' '2' '0t 1'
             ;;
 
    
@@ -87,22 +83,13 @@ setup_terastream() {
             delete_all_switch_vlans
 
             # remove port 4 (port 1 internally) from lan
-            uci add network switch_vlan
-            uci set network.@switch_vlan[-1].device='switch0'
-            uci set network.@switch_vlan[-1].vlan=1
-            uci set network.@switch_vlan[-1].ports='0 1 2 5t'
+            ucidef_add_switch_vlan 'switch0' '1' '0 1 2 5t'
 
             # add a new vlan with port 4
-            uci add network switch_vlan
-            uci set network.@switch_vlan[-1].device='switch0'
-            uci set network.@switch_vlan[-1].vlan=2
-            uci set network.@switch_vlan[-1].ports='3 5t'
+            ucidef_add_switch_vlan 'switch0' '2' '3 5t'
 
             # re-add (untagged) vlan for wan port
-            uci add network switch_vlan
-            uci set network.@switch_vlan[-1].device='switch0'
-            uci set network.@switch_vlan[-1].vlan=7
-            uci set network.@switch_vlan[-1].ports='4 6'
+            ucidef_add_switch_vlan 'switch0' '7' '4 6'
             ;;
 
         ap148| \
@@ -110,44 +97,26 @@ setup_terastream() {
             delete_all_switch_vlans
 
             # remove port 4 (port 1 internally) from lan
-            uci add network switch_vlan
-            uci set network.@switch_vlan[-1].device='switch0'
-            uci set network.@switch_vlan[-1].vlan=1
-            uci set network.@switch_vlan[-1].ports='6t 2 3 4'
+            ucidef_add_switch_vlan 'switch0' '1' '6t 2 3 4'
 
             # add a new vlan with port 4
-            uci add network switch_vlan
-            uci set network.@switch_vlan[-1].device='switch0'
-            uci set network.@switch_vlan[-1].vlan=2
-            uci set network.@switch_vlan[-1].ports='6t 1'
+            ucidef_add_switch_vlan 'switch0' '2' '6t 1'
 
             # re-add (untagged) vlan for wan port
-            uci add network switch_vlan
-            uci set network.@switch_vlan[-1].device='switch0'
-            uci set network.@switch_vlan[-1].vlan=7
-            uci set network.@switch_vlan[-1].ports='0 5'
+            ucidef_add_switch_vlan 'switch0' '7' '0 5'
             ;;
 
         armada-385-linksys-caiman)
             delete_all_switch_vlans
 
             # remove port 4 (port 0 internally) from lan
-            uci add network switch_vlan
-            uci set network.@switch_vlan[-1].device='switch0'
-            uci set network.@switch_vlan[-1].vlan=1
-            uci set network.@switch_vlan[-1].ports='1 2 3 6t'
+            ucidef_add_switch_vlan 'switch0' '1' '1 2 3 6t'
 
             # add a new vlan with port 4
-            uci add network switch_vlan
-            uci set network.@switch_vlan[-1].device='switch0'
-            uci set network.@switch_vlan[-1].vlan=2
-            uci set network.@switch_vlan[-1].ports='0 6t'
+            ucidef_add_switch_vlan 'switch0' '2' '0 6t'
 
             # re-add (untagged) vlan for wan port
-            uci add network switch_vlan
-            uci set network.@switch_vlan[-1].device='switch0'
-            uci set network.@switch_vlan[-1].vlan=7
-            uci set network.@switch_vlan[-1].ports='4 5'
+            ucidef_add_switch_vlan 'switch0' '7' '4 5'
             ;;
 
         *)
