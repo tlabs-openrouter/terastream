@@ -243,11 +243,50 @@ unsetup_terastream() {
     uci -q del_list dhcp.@dnsmasq[0].rebind_domaini=cdn.ts.t-com.hr
 
     # reset default vlan config
-    grep Comcerto -q /proc/cpuinfo && {
+
+    local board="$(cat /tmp/sysinfo/board_name)"
+
+    local lan_ports lan_cpu_port iptv_port wan_port wan_cpu_port
+
+    case "$board" in
+        rg200)
+            lan_cpu_port="0"
+            lan_ports="1 2 3 4"
+            ;;
+
+        ea4500)
+            lan_cpu_port="5"
+            lan_ports="1 2 3 4"
+            wan_cpu_port="6"
+            wan_port="4"
+            ;;
+
+        ap148| \
+        r7500)
+            lan_cpu_port="6"
+            lan_ports="1 2 3 4"
+            wan_cpu_port="0"
+            wan_port="5"
+            ;;
+
+        armada-385-linksys-caiman)
+            lan_cpu_port="6"
+            lan_ports="0 1 2 3"
+            wan_cpu_port="5"
+            wan_port="4"
+            ;;
+
+        *)
+            ;;
+    esac
+
+    if [ -n "$lan_ports" ]; then
         delete_all_switch_vlans
-        uci add network switch_vlan
-        uci set network.@switch_vlan[-1].device='switch0'
-        uci set network.@switch_vlan[-1].vlan=1
-        uci set network.@switch_vlan[0].ports='0t 1 2 3 4'
-    }
+
+        ucidef_add_switch_vlan "switch0" "1" "${lan_ports} ${lan_cpu_port}t"
+
+        if [ -n "$wan_port" ]; then
+            ucidef_add_switch_vlan "switch0" "7" "${wan_port} ${wan_cpu_port:-${lan_cpu_port}t}"
+        fi
+    fi
 }
