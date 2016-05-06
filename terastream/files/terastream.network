@@ -102,6 +102,7 @@ setup_terastream() {
             ;;
 
         *)
+            echo "WARNING: Unsupported board: $board, skipping vlan setup."
             ;;
     esac
 
@@ -277,6 +278,7 @@ unsetup_terastream() {
             ;;
 
         *)
+            echo "WARNING: Unsupported board: $board, skipping vlan unsetup."
             ;;
     esac
 
