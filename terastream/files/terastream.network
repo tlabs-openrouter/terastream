@@ -78,8 +78,8 @@ setup_terastream() {
    
         ea4500)
             lan_cpu_port="5"
-            lan_ports="2 3 4"
-            iptv_port="1"
+            lan_ports="0 1 2"
+            iptv_port="3"
             wan_cpu_port="6"
             wan_port="4"
             ;;
@@ -257,7 +257,7 @@ unsetup_terastream() {
 
         ea4500)
             lan_cpu_port="5"
-            lan_ports="1 2 3 4"
+            lan_ports="0 1 2 3"
             wan_cpu_port="6"
             wan_port="4"
             ;;
