@@ -146,14 +146,70 @@ setup_interface () {
 
 	MAPTYPE=""
 	MAPRULE=""
+	S46_TYPES=""
+	FALLBACK=""
 
 	if [ -n "$DHCP4_O_DHCP6_SERVERS_88" ]; then
-        	DHCP4_O_DHCP6_SERVERS="$DHCP4_O_DHCP6_SERVERS_88"
-        	DHCP4_O_DHCP6_MODE="rfc7341"
-	else
-	        DHCP4_O_DHCP6_SERVERS="$DHCP4_O_DHCP6_SERVERS_99"
-	        DHCP4_O_DHCP6_MODE="terastream"
+		S46_TYPES="$S46_TYPES dhcp4o6"
+		[ -n "$FALLBACK" ] || FALLBACK="dhcp4o6"
 	fi
+	if [ -n "$DHCP4_O_DHCP6_SERVERS_99" ]; then
+		S46_TYPES="$S46_TYPES 99"
+		[ -n "$FALLBACK" ] || FALLBACK="99"
+	fi
+	if [ -n "$MAPE" -a -f /lib/netifd/proto/map.sh ]; then
+		S46_TYPES="$S46_TYPES map-e"
+		[ -n "$FALLBACK" ] || FALLBACK="map-e"
+	fi
+	if [ -n "$MAPT" -a -f /lib/netifd/proto/map.sh -a -f /proc/net/nat46/control ]; then
+		S46_TYPES="$S46_TYPES map-t"
+		[ -n "$FALLBACK" ] || FALLBACK="map-t"
+	fi
+	if [ -n "$LW4O6" -a -f /lib/netifd/proto/map.sh ]; then
+		S46_TYPES="$S46_TYPES lw4o6"
+		[ -n "$FALLBACK" ] || FALLBACK="lw4o6"
+	fi
+	if [ -n "$AFTR_IP" -a -f /lib/netifd/proto/dslite.sh ]; then
+		S46_TYPES="$S46_TYPES ds-lite"
+		[ -n "$FALLBACK" ] || FALLBACK="ds-lite"
+	fi
+
+	for prio in $S46_PRIO; do
+		for type in $S46_TYPES; do
+			if [ "$prio" = "$type" ]; then
+				MAPTYPE=$prio
+				break
+			fi
+		done
+		[ -n "$MAPTYPE" ] && break
+	done
+
+
+	[ -n "$MAPTYPE" ] || MAPTYPE=$FALLBACK
+
+	case "$MAPTYPE" in
+		"map-e")
+			MAPRULE="$MAPE"
+			;;
+		"map-t")
+			MAPRULE="$MAPT"
+			;;
+		"lw4o6")
+			MAPRULE="$LW4O6"
+			;;
+		"dhcp4o6")
+			DHCP4_O_DHCP6_SERVERS="$DHCP4_O_DHCP6_SERVERS_88"
+			DHCP4_O_DHCP6_MODE="rfc7341"
+			;;
+		"99")
+			DHCP4_O_DHCP6_SERVERS="$DHCP4_O_DHCP6_SERVERS_99"
+			DHCP4_O_DHCP6_MODE="terastream"
+		"ds-lite")
+			;;
+		*)
+			MAPTYPE=""
+			;;
+	esac
 
 	if [ -n "$DHCP4_O_DHCP6_SERVERS" ]; then
 		local server
@@ -181,18 +237,7 @@ setup_interface () {
 
 	proto_send_update "$INTERFACE"
 
-	if [ -n "$MAPE" -a -f /lib/netifd/proto/map.sh ]; then
-		MAPTYPE="map-e"
-		MAPRULE="$MAPE"
-	elif [ -n "$MAPT" -a -f /lib/netifd/proto/map.sh -a -f /proc/net/nat46/control ]; then
-		MAPTYPE="map-t"
-		MAPRULE="$MAPT"
-	elif [ -n "$LW4O6" -a -f /lib/netifd/proto/map.sh ]; then
-		MAPTYPE="lw4o6"
-		MAPRULE="$LW4O6"
-	fi
-
-	if [ -z "$MAPTYPE" -a -n "$OPTION_199" ]; then
+	if [ -z "$MAPRULE" -a -n "$OPTION_199" ]; then
 		b4addr=$(ipv6calc --in ifinet6 --out ipv6addr "$OPTION_199")
 		json_init
 		json_add_string name "${INTERFACE}_b4"
