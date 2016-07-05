@@ -204,6 +204,8 @@ setup_interface () {
 		"99")
 			DHCP4_O_DHCP6_SERVERS="$DHCP4_O_DHCP6_SERVERS_99"
 			DHCP4_O_DHCP6_MODE="terastream"
+			;;
+
 		"ds-lite")
 			;;
 		*)
