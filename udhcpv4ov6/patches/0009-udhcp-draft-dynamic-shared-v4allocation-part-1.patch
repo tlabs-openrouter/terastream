@@ -1,7 +1,21 @@
-diff -ru a/networking/udhcp/common.c b/networking/udhcp/common.c
---- a/networking/udhcp/common.c	2014-12-15 21:08:59.573100344 +0100
-+++ b/networking/udhcp/common.c	2014-12-15 23:24:40.176009614 +0100
-@@ -67,6 +67,9 @@
+--- a/networking/udhcp/Config.src
++++ b/networking/udhcp/Config.src
+@@ -150,3 +150,12 @@ config FEATURE_DHCP4o6C
+ 	  However, to activate this mechanism flag -6 must be used when
+ 	  starting udhcpc.
+ 
++config FEATURE_V4_PORTPARAMS
++	bool "Dynamic Shared IPv4 Allocation port range"
++	default y
++	depends on UDHCPC
++	help
++	  Include Draft Dynamic Shared IPv4 Allocation PORTPARAMS option.
++	  PORTPARAMS determine the port set a client is allowed to use within
++	  a shared v4 address environment.
++
+--- a/networking/udhcp/common.c
++++ b/networking/udhcp/common.c
+@@ -67,6 +67,9 @@ const struct dhcp_optflag dhcp_optflags[
  	{ OPTION_6RD                              , DHCP_6RD },
  	{ OPTION_U16                              , DHCP_PORT_RANGE_MIN },
  	{ OPTION_U16                              , DHCP_PORT_RANGE_MAX },
@@ -11,7 +25,7 @@ diff -ru a/networking/udhcp/common.c b/networking/udhcp/common.c
  	{ OPTION_STATIC_ROUTES | OPTION_LIST      , DHCP_MS_STATIC_ROUTES },
  	{ OPTION_STRING                           , DHCP_WPAD },
  
-@@ -137,6 +140,9 @@
+@@ -137,6 +140,9 @@ const char dhcp_option_strings[] ALIGN1
  	"ip6rd" "\0"       /* DHCP_6RD            */
  	"port_range_min" "\0" /* DHCP_PORT_RANGE_MIN */
  	"port_range_max" "\0" /* DHCP_PORT_RANGE_MAX */
@@ -21,18 +35,17 @@ diff -ru a/networking/udhcp/common.c b/networking/udhcp/common.c
  	"msstaticroutes""\0"/* DHCP_MS_STATIC_ROUTES */
  	"wpad" "\0"        /* DHCP_WPAD           */
  	;
-diff -ru a/networking/udhcp/common.h b/networking/udhcp/common.h
---- a/networking/udhcp/common.h	2014-12-15 21:08:59.573100344 +0100
-+++ b/networking/udhcp/common.h	2014-12-15 23:24:40.176009614 +0100
-@@ -155,6 +155,7 @@
+--- a/networking/udhcp/common.h
++++ b/networking/udhcp/common.h
+@@ -150,6 +150,7 @@ enum {
+ #define DHCP_STATIC_ROUTES      0x79 /* RFC 3442. (mask,ip,router) tuples */
+ #define DHCP_VLAN_ID            0x84 /* 802.1P VLAN ID */
+ #define DHCP_VLAN_PRIORITY      0x85 /* 802.1Q VLAN priority */
++#define DHCP_V4_PORTPARAMS      0x9f /* RFC 7618 Port Parameters */
+ #define DHCP_PXE_CONF_FILE      0xd1 /* RFC 5071 Configuration File */
+ #define DHCP_PXE_PATH_PREFIX    0xd2 /* RFC 5071 Configuration File */
  #define DHCP_6RD                0xd4
- #define DHCP_PORT_RANGE_MIN     0xf0
- #define DHCP_PORT_RANGE_MAX     0xf1
-+#define DHCP_V4_PORTPARAMS      0xf2
- #define DHCP_MS_STATIC_ROUTES   0xf9 /* Microsoft's pre-RFC 3442 code for 0x79? */
- #define DHCP_WPAD               0xfc /* MSIE's Web Proxy Autodiscovery Protocol */
- #define DHCP_END                0xff
-@@ -198,6 +199,16 @@
+@@ -198,6 +199,16 @@ struct optionlength_bounds {
  	uint8_t max;
  };
  
@@ -49,27 +62,9 @@ diff -ru a/networking/udhcp/common.h b/networking/udhcp/common.h
  extern const struct optionlength_bounds dhcp_option_lengths[];
  
  unsigned FAST_FUNC udhcp_option_idx(const char *name);
-Only in b/networking/udhcp: .common.h.swp
-diff -ru a/networking/udhcp/Config.src b/networking/udhcp/Config.src
---- a/networking/udhcp/Config.src	2014-12-15 21:08:59.569100344 +0100
-+++ b/networking/udhcp/Config.src	2014-12-15 23:24:40.176009614 +0100
-@@ -150,3 +150,12 @@
- 	  However, to activate this mechanism flag -6 must be used when
- 	  starting udhcpc.
- 
-+config FEATURE_V4_PORTPARAMS
-+	bool "Dynamic Shared IPv4 Allocation port range"
-+	default y
-+	depends on UDHCPC
-+	help
-+	  Include Draft Dynamic Shared IPv4 Allocation PORTPARAMS option.
-+	  PORTPARAMS determine the port set a client is allowed to use within
-+	  a shared v4 address environment.
-+
-diff -ru a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
---- a/networking/udhcp/dhcpc.c	2014-12-15 21:08:59.573100344 +0100
-+++ b/networking/udhcp/dhcpc.c	2014-12-16 00:02:33.067918385 +0100
-@@ -211,7 +211,7 @@
+--- a/networking/udhcp/dhcpc.c
++++ b/networking/udhcp/dhcpc.c
+@@ -211,7 +211,7 @@ static int good_hostname(const char *nam
  #endif
  
  /* Create "opt_name=opt_value" string */
@@ -78,7 +73,7 @@ diff -ru a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
  {
  	unsigned upper_length;
  	int len, type, optlen;
-@@ -222,8 +222,13 @@
+@@ -222,8 +222,13 @@ static NOINLINE char *xmalloc_optname_op
  
  	type = optflag->flags & OPTION_TYPE_MASK;
  	optlen = dhcp_option_lengths[type].min;
@@ -94,7 +89,7 @@ diff -ru a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
  
  	dest = ret = xmalloc(upper_length + strlen(opt_name) + 2);
  	dest += sprintf(ret, "%s=", opt_name);
-@@ -252,9 +257,20 @@
+@@ -252,9 +257,20 @@ static NOINLINE char *xmalloc_optname_op
  		}
  		case OPTION_S32:
  		case OPTION_U32: {
@@ -118,7 +113,7 @@ diff -ru a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
  			break;
  		}
  		/* Note: options which use 'return' instead of 'break'
-@@ -513,7 +529,7 @@
+@@ -513,7 +529,7 @@ static char **fill_envp(struct dhcp_pack
  			goto next;
  		*found_ptr &= ~found_mask; /* leave only unknown options */
  		temp = opthash_lookup_simple(code, &opt_len);
@@ -127,7 +122,7 @@ diff -ru a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
  		putenv(*curr++);
  		if (code == DHCP_SUBNET) {
  			/* Subnet option: make things like "$ip/$mask" possible */
-@@ -628,6 +644,21 @@
+@@ -628,6 +644,21 @@ static void add_client_options(struct dh
  		udhcp_add_binary_option(packet, client_config.hostname);
  	if (client_config.fqdn)
  		udhcp_add_binary_option(packet, client_config.fqdn);
@@ -149,7 +144,7 @@ diff -ru a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
  
  	/* Request broadcast replies if we have no IP addr */
  	if ((option_mask32 & OPT_B) && packet->ciaddr == 0)
-@@ -1279,7 +1310,7 @@
+@@ -1279,7 +1310,7 @@ static void client_background(void)
  int udhcpc_main(int argc, char **argv) MAIN_EXTERNALLY_VISIBLE;
  int udhcpc_main(int argc UNUSED_PARAM, char **argv)
  {
@@ -158,7 +153,7 @@ diff -ru a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
  	const char *str_V, *str_h, *str_F, *str_r;
  	IF_FEATURE_UDHCPC_ARPING(const char *str_a = "2000";)
  	IF_FEATURE_UDHCP_PORT(char *str_P;)
-@@ -1437,6 +1468,10 @@
+@@ -1437,6 +1468,10 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  	}
  #endif
  
@@ -169,7 +164,7 @@ diff -ru a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
  	/* Make sure fd 0,1,2 are open */
  	bb_sanitize_stdio();
  	/* Equivalent of doing a fflush after every \n */
-@@ -1717,6 +1752,21 @@
+@@ -1717,6 +1752,21 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  			continue;
  		}
  
@@ -191,7 +186,7 @@ diff -ru a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
  		switch (state) {
  		case INIT_SELECTING:
  			/* Must be a DHCPOFFER */
-@@ -1789,7 +1839,7 @@
+@@ -1789,7 +1839,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  						lease_seconds = 0x0fffffff;
  				}
  #if ENABLE_FEATURE_UDHCPC_ARPING
@@ -200,10 +195,9 @@ diff -ru a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
  /* RFC 2131 3.1 paragraph 5:
   * "The client receives the DHCPACK message with configuration
   * parameters. The client SHOULD perform a final check on the
-diff -ru a/networking/udhcp/dhcpc.h b/networking/udhcp/dhcpc.h
---- a/networking/udhcp/dhcpc.h	2014-12-15 21:08:59.565100344 +0100
-+++ b/networking/udhcp/dhcpc.h	2014-12-15 23:24:40.176009614 +0100
-@@ -22,6 +22,7 @@
+--- a/networking/udhcp/dhcpc.h
++++ b/networking/udhcp/dhcpc.h
+@@ -22,6 +22,7 @@ struct client_config_t {
  	uint8_t *fqdn;                  /* Optional fully qualified domain name to use */
  
  	IF_FEATURE_DHCP4o6C(int mode4o6; /* DHCPv4 over DHCPv6 mode */)

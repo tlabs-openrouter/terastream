@@ -8,11 +8,9 @@ Subject: [PATCH 5/9] udhcp: check size of received packet
  networking/udhcp/dhcpc.c | 13 ++++++++++---
  1 file changed, 10 insertions(+), 3 deletions(-)
 
-diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
-index ccb5dc4..3826106 100644
 --- a/networking/udhcp/dhcpc.c
 +++ b/networking/udhcp/dhcpc.c
-@@ -957,7 +957,10 @@ static NOINLINE int udhcp_recv_raw_packet(struct dhcp_packet *dhcp_pkt, int fd)
+@@ -957,7 +957,10 @@ static NOINLINE int udhcp_recv_raw_packe
  	}
   skip_udp_sum_check:
  
@@ -24,7 +22,7 @@ index ccb5dc4..3826106 100644
  		bb_info_msg("Packet with bad magic, ignoring");
  		return -2;
  	}
-@@ -965,8 +968,12 @@ static NOINLINE int udhcp_recv_raw_packet(struct dhcp_packet *dhcp_pkt, int fd)
+@@ -965,8 +968,12 @@ static NOINLINE int udhcp_recv_raw_packe
  	log1("Received a packet");
  	udhcp_dump_packet(&packet.data);
  
@@ -39,6 +37,3 @@ index ccb5dc4..3826106 100644
  	return bytes;
  }
  
--- 
-2.1.3
-

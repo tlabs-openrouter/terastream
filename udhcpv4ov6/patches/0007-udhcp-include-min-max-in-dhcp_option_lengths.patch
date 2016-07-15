@@ -9,11 +9,9 @@ Subject: [PATCH 7/9] udhcp: include min/max in dhcp_option_lengths
  networking/udhcp/dhcpc.c  |  2 +-
  3 files changed, 25 insertions(+), 19 deletions(-)
 
-diff --git a/networking/udhcp/common.c b/networking/udhcp/common.c
-index cc8f547..9e5b830 100644
 --- a/networking/udhcp/common.c
 +++ b/networking/udhcp/common.c
-@@ -149,24 +149,24 @@ const char dhcp_option_strings[] ALIGN1 =
+@@ -149,24 +149,24 @@ const char dhcp_option_strings[] ALIGN1
   * is the number of elements, multiply in by one element's string width
   * (len_of_option_as_string[opt_type]) and you know how wide string you need.
   */
@@ -53,7 +51,7 @@ index cc8f547..9e5b830 100644
  };
  
  
-@@ -311,7 +311,7 @@ void FAST_FUNC udhcp_add_simple_option(struct dhcp_packet *packet, uint8_t code,
+@@ -311,7 +311,7 @@ void FAST_FUNC udhcp_add_simple_option(s
  			uint8_t option[6], len;
  
  			option[OPT_CODE] = code;
@@ -62,7 +60,7 @@ index cc8f547..9e5b830 100644
  			option[OPT_LEN] = len;
  			if (BB_BIG_ENDIAN)
  				data <<= 8 * (4 - len);
-@@ -472,7 +472,7 @@ int FAST_FUNC udhcp_str2optset(const char *const_str, void *arg)
+@@ -472,7 +472,7 @@ int FAST_FUNC udhcp_str2optset(const cha
  		val = strtok(NULL, ", \t");
  		if (!val)
  			break;
@@ -71,8 +69,6 @@ index cc8f547..9e5b830 100644
  		retval = 0;
  		opt = buffer; /* new meaning for variable opt */
  		switch (optflag->flags & OPTION_TYPE_MASK) {
-diff --git a/networking/udhcp/common.h b/networking/udhcp/common.h
-index dfe30e8..e7bde38 100644
 --- a/networking/udhcp/common.h
 +++ b/networking/udhcp/common.h
 @@ -192,7 +192,13 @@ struct option_set {
@@ -90,11 +86,9 @@ index dfe30e8..e7bde38 100644
  
  unsigned FAST_FUNC udhcp_option_idx(const char *name);
  
-diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
-index 3826106..91992a3 100644
 --- a/networking/udhcp/dhcpc.c
 +++ b/networking/udhcp/dhcpc.c
-@@ -218,7 +218,7 @@ static NOINLINE char *xmalloc_optname_optval(uint8_t *option, const struct dhcp_
+@@ -218,7 +218,7 @@ static NOINLINE char *xmalloc_optname_op
  	len = option[-OPT_DATA + OPT_LEN];
  
  	type = optflag->flags & OPTION_TYPE_MASK;
@@ -103,6 +97,3 @@ index 3826106..91992a3 100644
  	upper_length = len_of_option_as_string[type]
  		* ((unsigned)(len + optlen - 1) / (unsigned)optlen);
  
--- 
-2.1.3
-
