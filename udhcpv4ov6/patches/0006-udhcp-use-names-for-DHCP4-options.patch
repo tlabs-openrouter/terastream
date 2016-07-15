@@ -9,11 +9,9 @@ Subject: [PATCH 6/9] udhcp: use names for DHCP4 options
  networking/udhcp/common.h | 74 +++++++++++++++++++------------------
  2 files changed, 86 insertions(+), 82 deletions(-)
 
-diff --git a/networking/udhcp/common.c b/networking/udhcp/common.c
-index fb60a7c..cc8f547 100644
 --- a/networking/udhcp/common.c
 +++ b/networking/udhcp/common.c
-@@ -20,55 +20,55 @@ const uint8_t MAC_BCAST_ADDR[6] ALIGN2 = {
+@@ -20,55 +20,55 @@ const uint8_t MAC_BCAST_ADDR[6] ALIGN2 =
   */
  const struct dhcp_optflag dhcp_optflags[] = {
  	/* flags                                    code */
@@ -109,7 +107,7 @@ index fb60a7c..cc8f547 100644
  
  	/* Options below have no match in dhcp_option_strings[],
  	 * are not passed to dhcpc scripts, and cannot be specified
-@@ -77,13 +77,13 @@ const struct dhcp_optflag dhcp_optflags[] = {
+@@ -77,13 +77,13 @@ const struct dhcp_optflag dhcp_optflags[
  	 * to correctly encode options into packets.
  	 */
  
@@ -128,7 +126,7 @@ index fb60a7c..cc8f547 100644
  	{ 0, 0 } /* zeroed terminating entry */
  };
  
-@@ -96,8 +96,8 @@ const char dhcp_option_strings[] ALIGN1 =
+@@ -96,8 +96,8 @@ const char dhcp_option_strings[] ALIGN1
  	"subnet" "\0"      /* DHCP_SUBNET         */
  	"timezone" "\0"    /* DHCP_TIME_OFFSET    */
  	"router" "\0"      /* DHCP_ROUTER         */
@@ -139,8 +137,6 @@ index fb60a7c..cc8f547 100644
  	"dns" "\0"         /* DHCP_DNS_SERVER     */
  //	"logsrv" "\0"      /* DHCP_LOG_SERVER     */
  //	"cookiesrv" "\0"   /* DHCP_COOKIE_SERVER  */
-diff --git a/networking/udhcp/common.h b/networking/udhcp/common.h
-index 6f02850..dfe30e8 100644
 --- a/networking/udhcp/common.h
 +++ b/networking/udhcp/common.h
 @@ -75,16 +75,17 @@ enum {
@@ -250,6 +246,3 @@ index 6f02850..dfe30e8 100644
  #define DHCP_END                0xff
  
  /* Offsets in option byte sequence */
--- 
-2.1.3
-

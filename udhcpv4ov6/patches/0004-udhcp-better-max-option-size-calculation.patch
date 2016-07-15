@@ -22,8 +22,6 @@ Subject: [PATCH 4/9] udhcp: better max option size calculation
  networking/udhcp/packet.c       |  4 ++--
  14 files changed, 24 insertions(+), 54 deletions(-)
 
-diff --git a/configs/TEST_nommu_defconfig b/configs/TEST_nommu_defconfig
-index b45afd9..ba263f0 100644
 --- a/configs/TEST_nommu_defconfig
 +++ b/configs/TEST_nommu_defconfig
 @@ -773,7 +773,6 @@ CONFIG_FEATURE_UDHCP_PORT=y
@@ -34,8 +32,6 @@ index b45afd9..ba263f0 100644
  CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS="-R -n"
  CONFIG_VCONFIG=y
  CONFIG_WGET=y
-diff --git a/configs/TEST_noprintf_defconfig b/configs/TEST_noprintf_defconfig
-index 809b60c..6101030 100644
 --- a/configs/TEST_noprintf_defconfig
 +++ b/configs/TEST_noprintf_defconfig
 @@ -777,7 +777,6 @@ CONFIG_DHCPD_LEASES_FILE=""
@@ -46,8 +42,6 @@ index 809b60c..6101030 100644
  CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS=""
  # CONFIG_UDPSVD is not set
  # CONFIG_VCONFIG is not set
-diff --git a/configs/TEST_rh9_defconfig b/configs/TEST_rh9_defconfig
-index 565b826..dc5c36a 100644
 --- a/configs/TEST_rh9_defconfig
 +++ b/configs/TEST_rh9_defconfig
 @@ -793,7 +793,6 @@ CONFIG_FEATURE_UDHCP_PORT=y
@@ -58,8 +52,6 @@ index 565b826..dc5c36a 100644
  CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS="-R -n"
  CONFIG_UDPSVD=y
  CONFIG_VCONFIG=y
-diff --git a/configs/android2_defconfig b/configs/android2_defconfig
-index 4dfbdb5..48549a2 100644
 --- a/configs/android2_defconfig
 +++ b/configs/android2_defconfig
 @@ -832,7 +832,6 @@ CONFIG_UDHCP_DEBUG=9
@@ -70,8 +62,6 @@ index 4dfbdb5..48549a2 100644
  CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS="-R -n"
  # CONFIG_UDPSVD is not set
  # CONFIG_VCONFIG is not set
-diff --git a/configs/android_defconfig b/configs/android_defconfig
-index e35830e..6502570 100644
 --- a/configs/android_defconfig
 +++ b/configs/android_defconfig
 @@ -862,7 +862,6 @@ CONFIG_UDHCP_DEBUG=9
@@ -82,8 +72,6 @@ index e35830e..6502570 100644
  CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS="-R -n"
  CONFIG_UDPSVD=y
  CONFIG_VCONFIG=y
-diff --git a/configs/android_ndk_defconfig b/configs/android_ndk_defconfig
-index 01cc2dd..20c931d 100644
 --- a/configs/android_ndk_defconfig
 +++ b/configs/android_ndk_defconfig
 @@ -848,7 +848,6 @@ CONFIG_UDHCP_DEBUG=9
@@ -94,8 +82,6 @@ index 01cc2dd..20c931d 100644
  CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS="-R -n"
  CONFIG_UDPSVD=y
  CONFIG_VCONFIG=y
-diff --git a/configs/cygwin_defconfig b/configs/cygwin_defconfig
-index aa346e3..8284bb9 100644
 --- a/configs/cygwin_defconfig
 +++ b/configs/cygwin_defconfig
 @@ -832,7 +832,6 @@ CONFIG_UDHCP_DEBUG=0
@@ -106,8 +92,6 @@ index aa346e3..8284bb9 100644
  CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS=""
  CONFIG_UDPSVD=y
  # CONFIG_VCONFIG is not set
-diff --git a/configs/freebsd_defconfig b/configs/freebsd_defconfig
-index ec3ed03..2d7a73c 100644
 --- a/configs/freebsd_defconfig
 +++ b/configs/freebsd_defconfig
 @@ -810,7 +810,6 @@ CONFIG_DHCPD_LEASES_FILE=""
@@ -118,8 +102,6 @@ index ec3ed03..2d7a73c 100644
  CONFIG_IFUPDOWN_UDHCPC_CMD_OPTIONS=""
  # CONFIG_UDPSVD is not set
  # CONFIG_VCONFIG is not set
-diff --git a/networking/udhcp/Config.src b/networking/udhcp/Config.src
-index f8876cf..bc32164 100644
 --- a/networking/udhcp/Config.src
 +++ b/networking/udhcp/Config.src
 @@ -141,29 +141,6 @@ config UDHCPC_DEFAULT_SCRIPT
@@ -152,11 +134,9 @@ index f8876cf..bc32164 100644
  config FEATURE_DHCP4o6C
  	bool "Use DHCPv4 over DHCPv6 (client only)"
  	default y
-diff --git a/networking/udhcp/common.c b/networking/udhcp/common.c
-index 68c954e..fb60a7c 100644
 --- a/networking/udhcp/common.c
 +++ b/networking/udhcp/common.c
-@@ -290,7 +290,7 @@ void FAST_FUNC udhcp_add_binary_option(struct dhcp_packet *packet, uint8_t *addo
+@@ -290,7 +290,7 @@ void FAST_FUNC udhcp_add_binary_option(s
  
  	len = OPT_DATA + addopt[OPT_LEN];
  	/* end position + (option code/length + addopt length) + end option */
@@ -165,11 +145,9 @@ index 68c954e..fb60a7c 100644
  //TODO: learn how to use overflow option if we exhaust packet->options[]
  		bb_error_msg("option 0x%02x did not fit into the packet",
  				addopt[OPT_CODE]);
-diff --git a/networking/udhcp/common.h b/networking/udhcp/common.h
-index d20659e..6f02850 100644
 --- a/networking/udhcp/common.h
 +++ b/networking/udhcp/common.h
-@@ -18,12 +18,20 @@ extern const uint8_t MAC_BCAST_ADDR[6] ALIGN2; /* six all-ones */
+@@ -18,12 +18,20 @@ extern const uint8_t MAC_BCAST_ADDR[6] A
  
  
  /*** DHCP packet ***/
@@ -231,8 +209,6 @@ index d20659e..6f02850 100644
  /*** Options ***/
  
  enum {
-diff --git a/networking/udhcp/d6_common.h b/networking/udhcp/d6_common.h
-index eb211ea..c68deb8 100644
 --- a/networking/udhcp/d6_common.h
 +++ b/networking/udhcp/d6_common.h
 @@ -7,12 +7,16 @@
@@ -262,11 +238,9 @@ index eb211ea..c68deb8 100644
  } PACKED;
  #define d6_msg_type d6_u.d6_msg_type
  #define d6_xid32    d6_u.d6_xid32
-diff --git a/networking/udhcp/dhcp4o6.c b/networking/udhcp/dhcp4o6.c
-index 7d69470..a68ab94 100644
 --- a/networking/udhcp/dhcp4o6.c
 +++ b/networking/udhcp/dhcp4o6.c
-@@ -345,7 +345,7 @@ static int dhcp4o6_get_dhcpv4_from_dhcpv6 (
+@@ -345,7 +345,7 @@ static int dhcp4o6_get_dhcpv4_from_dhcpv
  	/* D6_OPT_DHCPV4_MSG must be first option? Where is that defined? FIXME */
  
  	opt_len = (d6opt[2]<<8) + d6opt[3];
@@ -275,11 +249,9 @@ index 7d69470..a68ab94 100644
  		log1("D6_OPT_DHCPV4_MSG option too small");
  		return -1;
  	}
-diff --git a/networking/udhcp/packet.c b/networking/udhcp/packet.c
-index 148f525..6f6f7c1 100644
 --- a/networking/udhcp/packet.c
 +++ b/networking/udhcp/packet.c
-@@ -149,7 +149,7 @@ int FAST_FUNC udhcp_send_raw_packet(struct dhcp_packet *dhcp_pkt,
+@@ -149,7 +149,7 @@ int FAST_FUNC udhcp_send_raw_packet(stru
  	 * Thus, we retain enough padding to not go below 300 BOOTP bytes.
  	 * Some devices have filters which drop DHCP packets shorter than that.
  	 */
@@ -288,7 +260,7 @@ index 148f525..6f6f7c1 100644
  	if (padding > DHCP_SIZE - 300)
  		padding = DHCP_SIZE - 300;
  
-@@ -221,7 +221,7 @@ int FAST_FUNC udhcp_send_kernel_packet(struct dhcp_packet *dhcp_pkt,
+@@ -221,7 +221,7 @@ int FAST_FUNC udhcp_send_kernel_packet(s
  	}
  
  	udhcp_dump_packet(dhcp_pkt);
@@ -297,6 +269,3 @@ index 148f525..6f6f7c1 100644
  	if (padding > DHCP_SIZE - 300)
  		padding = DHCP_SIZE - 300;
  	result = safe_write(fd, dhcp_pkt, DHCP_SIZE - padding);
--- 
-2.1.3
-

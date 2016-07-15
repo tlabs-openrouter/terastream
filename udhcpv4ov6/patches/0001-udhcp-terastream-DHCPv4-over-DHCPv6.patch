@@ -16,8 +16,6 @@ Subject: [PATCH 1/9] udhcp: terastream DHCPv4 over DHCPv6
  create mode 100644 networking/udhcp/dhcp4o6.c
  create mode 100644 networking/udhcp/dhcp4o6.h
 
-diff --git a/networking/udhcp/Config.src b/networking/udhcp/Config.src
-index c34c8d6..f8876cf 100644
 --- a/networking/udhcp/Config.src
 +++ b/networking/udhcp/Config.src
 @@ -163,3 +163,13 @@ config UDHCPC_SLACK_FOR_BUGGY_SERVERS
@@ -34,8 +32,6 @@ index c34c8d6..f8876cf 100644
 +	  However, to activate this mechanism flag -6 must be used when
 +	  starting udhcpc.
 +
-diff --git a/networking/udhcp/Kbuild.src b/networking/udhcp/Kbuild.src
-index b8767ba..647356a 100644
 --- a/networking/udhcp/Kbuild.src
 +++ b/networking/udhcp/Kbuild.src
 @@ -19,3 +19,5 @@ lib-$(CONFIG_DHCPRELAY)  += dhcprelay.o
@@ -44,8 +40,6 @@ index b8767ba..647356a 100644
  lib-$(CONFIG_FEATURE_UDHCP_RFC3397) += domain_codec.o
 +
 +lib-$(CONFIG_FEATURE_DHCP4o6C) += dhcp4o6.o d6_packet.o d6_socket.o
-diff --git a/networking/udhcp/d6_packet.c b/networking/udhcp/d6_packet.c
-index 79b2946..539d5ee 100644
 --- a/networking/udhcp/d6_packet.c
 +++ b/networking/udhcp/d6_packet.c
 @@ -11,6 +11,10 @@
@@ -73,9 +67,6 @@ index 79b2946..539d5ee 100644
  	packet.ip6.ip6_nxt = IPPROTO_UDP;
  
  	d6_dump_packet(d6_pkt);
-diff --git a/networking/udhcp/dhcp4o6.c b/networking/udhcp/dhcp4o6.c
-new file mode 100644
-index 0000000..7d69470
 --- /dev/null
 +++ b/networking/udhcp/dhcp4o6.c
 @@ -0,0 +1,428 @@
@@ -507,9 +498,6 @@ index 0000000..7d69470
 +		return -1;
 +	}
 +}
-diff --git a/networking/udhcp/dhcp4o6.h b/networking/udhcp/dhcp4o6.h
-new file mode 100644
-index 0000000..e81b0a5
 --- /dev/null
 +++ b/networking/udhcp/dhcp4o6.h
 @@ -0,0 +1,62 @@
@@ -575,8 +563,6 @@ index 0000000..e81b0a5
 +
 +#endif /* ENABLE_FEATURE_DHCP4o6C */
 +#endif /* DHCP4o6_H */
-diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
-index 35e7c20..ccb5dc4 100644
 --- a/networking/udhcp/dhcpc.c
 +++ b/networking/udhcp/dhcpc.c
 @@ -25,6 +25,10 @@
@@ -590,7 +576,7 @@ index 35e7c20..ccb5dc4 100644
  #include <netinet/if_ether.h>
  #include <linux/filter.h>
  #include <linux/if_packet.h>
-@@ -56,6 +60,8 @@ static const char udhcpc_longopts[] ALIGN1 =
+@@ -56,6 +60,8 @@ static const char udhcpc_longopts[] ALIG
  	"broadcast\0"      No_argument       "B"
  	IF_FEATURE_UDHCPC_ARPING("arping\0"	Optional_argument "a")
  	IF_FEATURE_UDHCP_PORT("client-port\0"	Required_argument "P")
@@ -613,7 +599,7 @@ index 35e7c20..ccb5dc4 100644
  };
  
  
-@@ -665,6 +675,10 @@ static void add_client_options(struct dhcp_packet *packet)
+@@ -665,6 +675,10 @@ static void add_client_options(struct dh
  
  static int raw_bcast_from_client_config_ifindex(struct dhcp_packet *packet)
  {
@@ -624,7 +610,7 @@ index 35e7c20..ccb5dc4 100644
  	return udhcp_send_raw_packet(packet,
  		/*src*/ INADDR_ANY, CLIENT_PORT,
  		/*dst*/ INADDR_BROADCAST, SERVER_PORT, MAC_BCAST_ADDR,
-@@ -673,10 +687,17 @@ static int raw_bcast_from_client_config_ifindex(struct dhcp_packet *packet)
+@@ -673,10 +687,17 @@ static int raw_bcast_from_client_config_
  
  static int bcast_or_ucast(struct dhcp_packet *packet, uint32_t ciaddr, uint32_t server)
  {
@@ -643,7 +629,7 @@ index 35e7c20..ccb5dc4 100644
  	return raw_bcast_from_client_config_ifindex(packet);
  }
  
-@@ -1072,11 +1093,18 @@ static void change_listen_mode(int new_mode)
+@@ -1072,11 +1093,18 @@ static void change_listen_mode(int new_m
  		close(sockfd);
  		sockfd = -1;
  	}
@@ -686,7 +672,7 @@ index 35e7c20..ccb5dc4 100644
  //usage:	IF_FEATURE_UDHCPC_ARPING(
  //usage:     "\n	-a[MSEC]	Validate offered address with ARP ping"
  //usage:	)
-@@ -1240,6 +1278,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1240,6 +1278,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  	const char *str_V, *str_h, *str_F, *str_r;
  	IF_FEATURE_UDHCPC_ARPING(const char *str_a = "2000";)
  	IF_FEATURE_UDHCP_PORT(char *str_P;)
@@ -694,7 +680,7 @@ index 35e7c20..ccb5dc4 100644
  	void *clientid_mac_ptr;
  	llist_t *list_O = NULL;
  	llist_t *list_x = NULL;
-@@ -1273,6 +1312,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1273,6 +1312,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  		USE_FOR_MMU("b")
  		IF_FEATURE_UDHCPC_ARPING("a::")
  		IF_FEATURE_UDHCP_PORT("P:")
@@ -702,7 +688,7 @@ index 35e7c20..ccb5dc4 100644
  		"v"
  		, &str_V, &str_h, &str_h, &str_F
  		, &client_config.interface, &client_config.pidfile, &str_r /* i,p */
-@@ -1282,6 +1322,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1282,6 +1322,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  		, &list_x
  		IF_FEATURE_UDHCPC_ARPING(, &str_a)
  		IF_FEATURE_UDHCP_PORT(, &str_P)
@@ -710,7 +696,7 @@ index 35e7c20..ccb5dc4 100644
  		IF_UDHCP_VERBOSE(, &dhcp_verbose)
  	);
  	if (opt & (OPT_h|OPT_H)) {
-@@ -1378,6 +1419,17 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1378,6 +1419,17 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  		logmode |= LOGMODE_SYSLOG;
  	}
  
@@ -728,7 +714,7 @@ index 35e7c20..ccb5dc4 100644
  	/* Make sure fd 0,1,2 are open */
  	bb_sanitize_stdio();
  	/* Equivalent of doing a fflush after every \n */
-@@ -1605,6 +1657,13 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1605,6 +1657,13 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  			int len;
  
  			/* A packet is ready, read it */
@@ -742,8 +728,6 @@ index 35e7c20..ccb5dc4 100644
  			if (listen_mode == LISTEN_KERNEL)
  				len = udhcp_recv_kernel_packet(&packet, sockfd);
  			else
-diff --git a/networking/udhcp/dhcpc.h b/networking/udhcp/dhcpc.h
-index 9f423a5..2ed1496 100644
 --- a/networking/udhcp/dhcpc.h
 +++ b/networking/udhcp/dhcpc.h
 @@ -21,6 +21,8 @@ struct client_config_t {
@@ -755,6 +739,3 @@ index 9f423a5..2ed1496 100644
  	uint16_t first_secs;
  	uint16_t last_secs;
  } FIX_ALIASING;
--- 
-2.1.3
-

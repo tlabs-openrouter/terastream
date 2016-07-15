@@ -15,8 +15,6 @@ Subject: [PATCH 8/9] udhcp: add opt_hash for option values
  create mode 100644 networking/udhcp/options_hash.c
  create mode 100644 networking/udhcp/options_hash.h
 
-diff --git a/networking/udhcp/Kbuild.src b/networking/udhcp/Kbuild.src
-index 647356a..04102f2 100644
 --- a/networking/udhcp/Kbuild.src
 +++ b/networking/udhcp/Kbuild.src
 @@ -9,7 +9,7 @@ lib-y:=
@@ -28,8 +26,6 @@ index 647356a..04102f2 100644
  lib-$(CONFIG_UDHCPD)     += common.o packet.o signalpipe.o socket.o
  
  lib-$(CONFIG_UDHCPC)     += dhcpc.o
-diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
-index 91992a3..9bd5f9f 100644
 --- a/networking/udhcp/dhcpc.c
 +++ b/networking/udhcp/dhcpc.c
 @@ -24,6 +24,7 @@
@@ -40,7 +36,7 @@ index 91992a3..9bd5f9f 100644
  
  #if ENABLE_FEATURE_DHCP4o6C
  #include "dhcp4o6.h"
-@@ -128,6 +129,8 @@ static const uint8_t len_of_option_as_string[] = {
+@@ -128,6 +129,8 @@ static const uint8_t len_of_option_as_st
  	[OPTION_S32             ] = sizeof("-2147483684 "),
  };
  
@@ -49,7 +45,7 @@ index 91992a3..9bd5f9f 100644
  /* note: ip is a pointer to an IP in network order, possibly misaliged */
  static int sprint_nip(char *dest, const char *pre, const uint8_t *ip)
  {
-@@ -421,6 +424,7 @@ static char **fill_envp(struct dhcp_packet *packet)
+@@ -421,6 +424,7 @@ static char **fill_envp(struct dhcp_pack
  	char **envp, **curr;
  	const char *opt_name;
  	uint8_t *temp;
@@ -57,7 +53,7 @@ index 91992a3..9bd5f9f 100644
  	uint8_t overload = 0;
  
  #define BITMAP unsigned
-@@ -445,11 +449,9 @@ static char **fill_envp(struct dhcp_packet *packet)
+@@ -445,11 +449,9 @@ static char **fill_envp(struct dhcp_pack
  		/* note: do not search for "pad" (0) and "end" (255) options */
  //TODO: change logic to scan packet _once_
  		for (i = 1; i < 255; i++) {
@@ -71,7 +67,7 @@ index 91992a3..9bd5f9f 100644
  					envc++; /* for $mask */
  				envc++;
  				/*if (i != DHCP_MESSAGE_TYPE)*/
-@@ -510,7 +512,7 @@ static char **fill_envp(struct dhcp_packet *packet)
+@@ -510,7 +512,7 @@ static char **fill_envp(struct dhcp_pack
  		if (!(*found_ptr & found_mask))
  			goto next;
  		*found_ptr &= ~found_mask; /* leave only unknown options */
@@ -80,7 +76,7 @@ index 91992a3..9bd5f9f 100644
  		*curr = xmalloc_optname_optval(temp, &dhcp_optflags[i], opt_name);
  		putenv(*curr++);
  		if (code == DHCP_SUBNET) {
-@@ -532,16 +534,12 @@ static char **fill_envp(struct dhcp_packet *packet)
+@@ -532,16 +534,12 @@ static char **fill_envp(struct dhcp_pack
  			continue;
  		}
  		if (bitmap & BMASK(i)) {
@@ -101,7 +97,7 @@ index 91992a3..9bd5f9f 100644
  			putenv(*curr++);
  		}
  		i++;
-@@ -1303,6 +1301,8 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1303,6 +1301,8 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  	int max_fd;
  	int retval;
  	fd_set rfds;
@@ -110,7 +106,7 @@ index 91992a3..9bd5f9f 100644
  
  	/* Default options */
  	IF_FEATURE_UDHCP_PORT(SERVER_PORT = 67;)
-@@ -1457,6 +1457,8 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1457,6 +1457,8 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  	timeout = 0;
  	already_waited_sec = 0;
  
@@ -119,7 +115,7 @@ index 91992a3..9bd5f9f 100644
  	/* Main event loop. select() waits on signal pipe and possibly
  	 * on sockfd.
  	 * "continue" statements in code below jump to the top of the loop.
-@@ -1661,21 +1663,19 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1661,21 +1663,19 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  			continue; /* no */
  
  		{
@@ -146,7 +142,7 @@ index 91992a3..9bd5f9f 100644
  				/* Error is severe, reopen socket */
  				bb_info_msg("Read error: %s, reopening socket", strerror(errno));
  				sleep(discover_timeout); /* 3 seconds by default */
-@@ -1685,7 +1685,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1685,7 +1685,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  			 * we will go back and wait for next one.
  			 * Be sure timeout is properly decreased. */
  			already_waited_sec += (unsigned)monotonic_sec() - timestamp_before_wait;
@@ -155,7 +151,7 @@ index 91992a3..9bd5f9f 100644
  				continue;
  		}
  
-@@ -1704,7 +1704,14 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1704,7 +1704,14 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  			continue;
  		}
  
@@ -171,7 +167,7 @@ index 91992a3..9bd5f9f 100644
  		if (message == NULL) {
  			bb_error_msg("no message type option, ignoring packet");
  			continue;
-@@ -1741,7 +1748,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1741,7 +1748,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
   * They say ISC DHCP client supports this case.
   */
  				server_addr = 0;
@@ -180,7 +176,7 @@ index 91992a3..9bd5f9f 100644
  				if (!temp) {
  					bb_error_msg("no server ID, using 0.0.0.0");
  				} else {
-@@ -1767,7 +1774,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1767,7 +1774,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  				struct in_addr temp_addr;
  				uint8_t *temp;
  
@@ -189,7 +185,7 @@ index 91992a3..9bd5f9f 100644
  				if (!temp) {
  					bb_error_msg("no lease time with ACK, using 1 hour lease");
  					lease_seconds = 60 * 60;
-@@ -1852,7 +1859,7 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1852,7 +1859,7 @@ int udhcpc_main(int argc UNUSED_PARAM, c
  					uint32_t svid;
  					uint8_t *temp;
  
@@ -198,16 +194,13 @@ index 91992a3..9bd5f9f 100644
  					if (!temp) {
   non_matching_svid:
  						log1("%s with wrong server ID, ignoring packet",
-@@ -1892,5 +1899,6 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1892,5 +1899,6 @@ int udhcpc_main(int argc UNUSED_PARAM, c
   ret:
  	/*if (client_config.pidfile) - remove_pidfile has its own check */
  		remove_pidfile(client_config.pidfile);
 +	opthash_destroy();
  	return retval;
  }
-diff --git a/networking/udhcp/options_hash.c b/networking/udhcp/options_hash.c
-new file mode 100644
-index 0000000..046b3ff
 --- /dev/null
 +++ b/networking/udhcp/options_hash.c
 @@ -0,0 +1,756 @@
@@ -967,9 +960,6 @@ index 0000000..046b3ff
 +#endif /* ENABLE_UNIT_TEST */
 +
 +
-diff --git a/networking/udhcp/options_hash.h b/networking/udhcp/options_hash.h
-new file mode 100644
-index 0000000..0f896e1
 --- /dev/null
 +++ b/networking/udhcp/options_hash.h
 @@ -0,0 +1,39 @@
@@ -1012,6 +1002,3 @@ index 0000000..0f896e1
 +int udhcp_prepare_opthash(struct dhcp_packet *packet, int packet_len);
 +
 +#endif
--- 
-2.1.3
-

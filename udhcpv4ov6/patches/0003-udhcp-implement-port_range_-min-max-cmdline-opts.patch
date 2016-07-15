@@ -7,11 +7,9 @@ Subject: [PATCH 3/9] udhcp: implement port_range_{min,max} cmdline opts
  networking/udhcp/common.c | 4 ++++
  1 file changed, 4 insertions(+)
 
-diff --git a/networking/udhcp/common.c b/networking/udhcp/common.c
-index bc41c8d..68c954e 100644
 --- a/networking/udhcp/common.c
 +++ b/networking/udhcp/common.c
-@@ -65,6 +65,8 @@ const struct dhcp_optflag dhcp_optflags[] = {
+@@ -65,6 +65,8 @@ const struct dhcp_optflag dhcp_optflags[
  	{ OPTION_STRING                           , 0xd1 }, /* DHCP_PXE_CONF_FILE */
  	{ OPTION_STRING                           , 0xd2 }, /* DHCP_PXE_PATH_PREFIX */
  	{ OPTION_6RD                              , 0xd4 }, /* DHCP_6RD           */
@@ -20,7 +18,7 @@ index bc41c8d..68c954e 100644
  	{ OPTION_STATIC_ROUTES | OPTION_LIST      , 0xf9 }, /* DHCP_MS_STATIC_ROUTES */
  	{ OPTION_STRING                           , 0xfc }, /* DHCP_WPAD          */
  
-@@ -133,6 +135,8 @@ const char dhcp_option_strings[] ALIGN1 =
+@@ -133,6 +135,8 @@ const char dhcp_option_strings[] ALIGN1
  	"pxeconffile" "\0" /* DHCP_PXE_CONF_FILE  */
  	"pxepathprefix" "\0" /* DHCP_PXE_PATH_PREFIX  */
  	"ip6rd" "\0"       /* DHCP_6RD            */
@@ -29,6 +27,3 @@ index bc41c8d..68c954e 100644
  	"msstaticroutes""\0"/* DHCP_MS_STATIC_ROUTES */
  	"wpad" "\0"        /* DHCP_WPAD           */
  	;
--- 
-2.1.3
-
