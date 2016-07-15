@@ -7,11 +7,9 @@ Subject: [PATCH 2/9] udhcp: 4o6 message types and options by RFC 7341
  networking/udhcp/dhcp4o6.h | 6 +++---
  1 file changed, 3 insertions(+), 3 deletions(-)
 
-diff --git a/networking/udhcp/dhcp4o6.h b/networking/udhcp/dhcp4o6.h
-index e81b0a5..e6d6de4 100644
 --- a/networking/udhcp/dhcp4o6.h
 +++ b/networking/udhcp/dhcp4o6.h
-@@ -20,11 +20,11 @@ PUSH_AND_SET_FUNCTION_VISIBILITY_TO_HIDDEN
+@@ -20,11 +20,11 @@ PUSH_AND_SET_FUNCTION_VISIBILITY_TO_HIDD
  #define MODE4o6_KERNEL_MODE  8
  
  /* DHCPv4o6 message types */
@@ -26,6 +24,3 @@ index e81b0a5..e6d6de4 100644
  
  /* send/recv/listen modes */
  #define SOCKET_NONE   0
--- 
-2.1.3
-
