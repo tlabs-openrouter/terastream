@@ -333,9 +333,6 @@ teardown_interface() {
 
 logger -t "terastream" "script: $1 - $2"
 
-echo "$1 - $2" >> /tmp/script.env
-env >> /tmp/script.env
-
 case "$2" in
 	bound)
 		teardown_interface "$1"
