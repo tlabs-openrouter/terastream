@@ -33,6 +33,7 @@ define Package/terastream
   DEPENDS+= +ds-lite +map
   DEPENDS+= +logremote-terastream
   DEPENDS+= +odhcpd
+  DEPENDS+= +iptables
 endef
 
 define Package/terastream/description
