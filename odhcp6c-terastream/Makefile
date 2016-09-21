@@ -39,7 +39,7 @@ define Package/odhcp6c-terastream
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Embedded DHCPv6-client for OpenWrt, Terastream fork
-  DEPENDS:=+kmod-ipv6
+  DEPENDS:=@IPV6
 endef
 
 define Package/odhcp6c-terastream/config
