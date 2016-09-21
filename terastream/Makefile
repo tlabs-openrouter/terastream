@@ -22,7 +22,7 @@ define Package/terastream
   TITLE:=Terastream
 
   DEPENDS+= +dnsmasq-full
-  DEPENDS+= +kmod-ipv6
+  DEPENDS+= @IPV6
   DEPENDS+= +kmod-ip6-tunnel
   DEPENDS+= +ip
   DEPENDS+= +ipv6calc-mini
