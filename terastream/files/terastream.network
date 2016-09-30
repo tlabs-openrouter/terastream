@@ -1,13 +1,23 @@
 # setup_network profile for terastream HR
 
+ucidef_add_switch_vlan() {
+	local device=$1
+	local vlan=$2
+	local ports=$3
+	uci batch <<EOF
+add network switch_vlan
+set network.@switch_vlan[-1].device='$device'
+set network.@switch_vlan[-1].vlan='$vlan'
+set network.@switch_vlan[-1].ports='$ports'
+EOF
+}
+
 delete_all_switch_vlans() {
  vlans="$(uci -q show network | grep 'network.@switch_vlan\[' | cut -d[ -f 2 | cut -d] -f 1 | uniq)"
  for i in $vlans; do uci del network.@switch_vlan\[0\]; done
 }
 
 setup_terastream() {
-    . /lib/functions/uci-defaults.sh
-
     wan_eth=$(get_wanif)
     [ -z "$wan_eth" ] && {
         logger -s -t terastream "$0: Can't find wan interface name!" \
