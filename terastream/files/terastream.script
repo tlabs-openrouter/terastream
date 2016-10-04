@@ -149,14 +149,6 @@ setup_interface () {
 	S46_TYPES=""
 	FALLBACK=""
 
-	if [ -n "$DHCP4_O_DHCP6_SERVERS_88" ]; then
-		S46_TYPES="$S46_TYPES dhcp4o6"
-		[ -n "$FALLBACK" ] || FALLBACK="dhcp4o6"
-	fi
-	if [ -n "$DHCP4_O_DHCP6_SERVERS_99" ]; then
-		S46_TYPES="$S46_TYPES 99"
-		[ -n "$FALLBACK" ] || FALLBACK="99"
-	fi
 	if [ -n "$MAPE" -a -f /lib/netifd/proto/map.sh ]; then
 		S46_TYPES="$S46_TYPES map-e"
 		[ -n "$FALLBACK" ] || FALLBACK="map-e"
@@ -168,6 +160,14 @@ setup_interface () {
 	if [ -n "$LW4O6" -a -f /lib/netifd/proto/map.sh ]; then
 		S46_TYPES="$S46_TYPES lw4o6"
 		[ -n "$FALLBACK" ] || FALLBACK="lw4o6"
+	fi
+	if [ -n "$DHCP4_O_DHCP6_SERVERS_88" ]; then
+		S46_TYPES="$S46_TYPES dhcp4o6"
+		[ -n "$FALLBACK" ] || FALLBACK="dhcp4o6"
+	fi
+	if [ -n "$DHCP4_O_DHCP6_SERVERS_99" ]; then
+		S46_TYPES="$S46_TYPES 99"
+		[ -n "$FALLBACK" ] || FALLBACK="99"
 	fi
 	if [ -n "$AFTR_IP" -a -f /lib/netifd/proto/dslite.sh ]; then
 		S46_TYPES="$S46_TYPES ds-lite"
