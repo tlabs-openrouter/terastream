@@ -109,6 +109,9 @@ setup_terastream() {
             iptv_port="0"
             wan_cpu_port="5"
             wan_port="4"
+
+            # fix default lan ifname from eth1 to eth1.1
+            uci set network.lan.ifname=eth1.1
             ;;
 
         *)
