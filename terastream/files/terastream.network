@@ -17,8 +17,12 @@ delete_all_switch_vlans() {
  for i in $vlans; do uci del network.@switch_vlan\[0\]; done
 }
 
+multiple() {
+    echo "$1" | grep -q " "
+}
+
 setup_terastream() {
-    wan_eth=$(get_wanif)
+    wan_eth="$(get_wanif)"
     [ -z "$wan_eth" ] && {
         logger -s -t terastream "$0: Can't find wan interface name!" \
         "Skipping network config."
@@ -38,7 +42,9 @@ setup_terastream() {
 
     uci set network.wan.proto='terastream'
 
-    uci set network.wan.ifname=$wan_eth
+    uci set network.wan.ifname="$wan_eth"
+
+    multiple "$wan_eth" && uci set network.wan.type='bridge'
 
     wan6=$(uci -q get network.wan6)
 
@@ -76,13 +82,6 @@ setup_terastream() {
     uci_add_to_list_if_absent network.lan.ip6class '5f414e59'
 
     local board="$(cat /tmp/sysinfo/board_name)"
-
-    case "$board" in
-        armada-388-clearfog)
-            uci set network.wan.ifname="eth1 eth2"
-            uci set network.wan.type="bridge"
-        ;;
-    esac
 
     local lan_ports lan_cpu_port iptv_port wan_port wan_cpu_port
 
