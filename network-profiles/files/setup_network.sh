@@ -17,8 +17,8 @@ uci_add_to_list_if_absent() {
 # if unset, try previously set from /etc/config/network
 get_wanif() {
     wan_eth=$(uci -q get profiles.network.wan_if)
-    [ -z "$wan_eth" ] && wan_eth=$(uci -q get network.wan.ifname)
-    echo $wan_eth
+    [ -z "$wan_eth" ] && wan_eth="$(uci -q get network.wan.ifname)"
+    echo "$wan_eth"
 }
 
 # get device's default iptv interface name from uci.
