@@ -4,10 +4,33 @@
 	exit 1
 }
 
-get_ifname() {
+get_ifnames() {
     local logical=$1
+    local ifnames=""
 
-    echo $(uci -q get network.${logical}.ifname | cut "-d " -f1 | cut -d. -f1)
+    for iface in $(uci -q get network.${logical}.ifname); do
+        ifnames="$ifnames $(echo $iface | cut "-d " -f1 | cut -d. -f1)"
+    done
+    echo "$ifnames"
+}
+
+set_mtu() {
+    local iface="$1"
+    local mtu="$2"
+
+    case "$iface" in
+        wifi*)
+            if [ "$mtu" -ge "2304" ]; then
+                mtu=2304
+            fi
+            ;;
+    esac
+
+    uci -q del network.${iface}_mtu
+    uci set network.${iface}_mtu="interface"
+    uci set network.${iface}_mtu.proto="none"
+    uci set network.${iface}_mtu.ifname="${iface}"
+    uci set network.${iface}_mtu.mtu="$mtu"
 }
 
 mtu=$1
@@ -16,17 +39,17 @@ set_wan_mtu=0
 set_lan_mtu=0
 
 lan_if="$(uci -q get profiles.network.lan_if)"
-lan_if=${lan_if:-$(get_ifname lan)}
+lan_if="${lan_if:-$(get_ifnames lan)}"
 [ -z "${lan_if}" ] && {
-	echo "Error: LAN interface not configured. (profiles.network.lan_if)."
-	exit 1
+    echo "Error: LAN interface not configured. (profiles.network.lan_if)."
+    exit 1
 }
 
 wan_if="$(uci -q get profiles.network.wan_if)"
-wan_if=${wan_if:-$(get_ifname wan)}
+wan_if="${wan_if:-$(get_ifnames wan)}"
 [ -z "${wan_if}" ] && {
-	echo "Error: WAN interface not configured. (profiles.network.wan_if)."
-	exit 1
+    echo "Error: WAN interface not configured. (profiles.network.wan_if)."
+    exit 1
 }
 
 max_mtu="$(uci -q get profiles.network.max_mtu)"
@@ -38,58 +61,32 @@ if [ "$mtu" -gt "$max_mtu" ]; then
 fi
 
 case "$zone" in
-	wan)
-		set_wan_mtu=1
-		;;
-	lan)
-		set_lan_mtu=1
-		;;
-	"")
-		set_wan_mtu=1
-		set_lan_mtu=1
-		;;
-	*)
-		echo "Error: unknown zone '$zone'"
-		exit 1
-		;;
+    wan)
+        set_wan_mtu=1
+        ;;
+    lan)
+        set_lan_mtu=1
+        ;;
+    "")
+        set_wan_mtu=1
+        set_lan_mtu=1
+        ;;
+    *)
+        echo "Error: unknown zone '$zone'"
+        exit 1
+        ;;
 esac
-	
 
 if [ "$set_lan_mtu" -eq 1 ]; then
-	uci -q del network.lan_mtu
-	uci set network.lan_mtu="interface"
-	uci set network.lan_mtu.proto="none"
-	uci set network.lan_mtu.ifname="$lan_if"
-	uci set network.lan_mtu.mtu="$mtu"
-
-	uci -q del network.wifi0_mtu
-	uci set network.wifi0_mtu="interface"
-	uci set network.wifi0_mtu.proto="none"
-	uci set network.wifi0_mtu.ifname="wlan0"
-
-	# should be harmless regardless of wifi1 presence
-
-	uci -q del network.wifi1_mtu
-	uci set network.wifi1_mtu="interface"
-	uci set network.wifi1_mtu.proto="none"
-	uci set network.wifi1_mtu.ifname="wlan1"
-
-	if [ "$mtu" -ge "2304" ]; then
-		echo "Limiting wifi MTU to 2304"
-		uci set network.wifi0_mtu.mtu="2304"
-		uci set network.wifi1_mtu.mtu="2304"
-	else
-		uci set network.wifi0_mtu.mtu="$mtu"
-		uci set network.wifi1_mtu.mtu="$mtu"
-	fi
+    for i in $lan_if wifi0 wifi1; do
+        set_mtu "$i" $mtu
+    done
 fi
 
 if [ "$set_wan_mtu" -eq 1 ]; then
-	uci -q del network.wan_mtu
-	uci set network.wan_mtu="interface"
-	uci set network.wan_mtu.proto="none"
-	uci set network.wan_mtu.ifname="$wan_if"
-	uci set network.wan_mtu.mtu="$mtu"
+    for i in $wan_if; do
+        set_mtu "$i" $mtu
+    done
 fi
 
 uci commit network
