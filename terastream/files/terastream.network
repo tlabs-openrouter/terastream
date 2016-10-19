@@ -77,6 +77,13 @@ setup_terastream() {
 
     local board="$(cat /tmp/sysinfo/board_name)"
 
+    case "$board" in
+        armada-388-clearfog)
+            uci set network.wan.ifname="eth1 eth2"
+            uci set network.wan.type="bridge"
+        ;;
+    esac
+
     local lan_ports lan_cpu_port iptv_port wan_port wan_cpu_port
 
     case "$board" in
