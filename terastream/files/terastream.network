@@ -44,7 +44,10 @@ setup_terastream() {
 
     uci set network.wan.ifname="$wan_eth"
 
-    multiple "$wan_eth" && uci set network.wan.type='bridge'
+    multiple "$wan_eth" && {
+	uci set network.wan.type='bridge'
+	uci set network.wan.igmp_snooping='0'
+    }
 
     wan6=$(uci -q get network.wan6)
 
