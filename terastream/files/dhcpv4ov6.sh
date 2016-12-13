@@ -42,12 +42,8 @@ proto_dhcpv4ov6_setup() {
 		append dhcpopts "-O $opt"
 	done
 
-	if [ -n "mode" ]; then
-		if [ -n "$dhcp_servers" ]; then
-			ia_b4="$aftr_local"
-		else
-			ia_b4="$(uci_get_state network wan aftr_local)"
-		fi
+	if [ -n "$dhcp_servers" ]; then
+		ia_b4="$aftr_local"
 	fi
 
 	[ "$broadcast" = 1 ] && broadcast="-B" || broadcast=
@@ -58,26 +54,6 @@ proto_dhcpv4ov6_setup() {
 
 	if [ -n "$clientid" ]; then
 		clientid="-x 0x3d:${clientid//:/}"
-	else
-		local dhcpv6_duid="$(uci_get_state network wan dhcpv6_duid)"
-		local dhcpv6_duid_len=$(echo -n "$dhcpv6_duid" | wc -c)
-		
-		# a DHCPv6 DUID is at least 10 bytes (20 nibbles) long
-		
-		if [ $dhcpv6_duid_len -gt 19 ]; then
-			clientid="-x 0x3d:ff00000000${dhcpv6_duid}"
-		else
-			if [ -z "$ia_b4" ]; then
-				clientid="-C"
-			else
-				local DHCP_CLIENT_ID
-				
-				DHCP_CLIENT_ID=0$(ipv6calc --in ipv6 --out ipv6 --printprefix --printfulluncompressed --uppercase $ia_b4/64)
-				DHCP_CLIENT_ID="$(echo $DHCP_CLIENT_ID | sed s/://g)"
-
-				clientid="-x 0x3d:$DHCP_CLIENT_ID"
-			fi
-		fi
 	fi
 	
 	logger -t $config "Using Client-ID $clientid for DHCPv4o6 request."
@@ -85,35 +61,20 @@ proto_dhcpv4ov6_setup() {
 	[ "$nodefaultopts" = 1 ] && nodefaultopts="-o" || nodefaultopts=
 
 	local mode_opts
-	if [ -n "mode" ]; then
-		local aftr_dhcp4o6_servers server
+	local aftr_dhcp4o6_servers server
 
-		if [ -n "$dhcp_servers" ]; then
-			aftr_dhcp4o6_servers="$dhcp_servers"
-		else
-			aftr_dhcp4o6_servers="$(uci_get_state network wan aftr_dhcp4o6_servers)"
-		fi
+	for server in $dhcp_servers; do
+		append mode_opts "-6 $server"
+	done
 
-		for server in $aftr_dhcp4o6_servers; do
-			append mode_opts "-6 $server"
-		done
-
-		append mode_opts "-I $ia_b4"
-	fi
+	append mode_opts "-I $ia_b4"
 
 	[ -n "$iface6rd" ] && proto_export "IFACE6RD=$iface6rd"
 
-	local dhcp4o6_mode
-	if [ -n "$dhcp_mode" ]; then
-		dhcp4o6_mode=$dhcp_mode
-	else
-		dhcp4o6_mode="$(uci_get_state network wan aftr_dhcp4o6_mode)"
-	fi
-
 	local DHCP_CLIENT
-	if [ "$dhcp4o6_mode" = "rfc7341" ]; then
+	if [ "$dhcp_mode" = "rfc7341" ]; then
 		DHCP_CLIENT="udhcpv4ov6"
-	elif [ "$dhcp4o6_mode" = "terastream" ]; then
+	elif [ "$dhcp_mode" = "terastream" ]; then
 		DHCP_CLIENT="udhcpc"
 	else
 		logger -t $config "ERROR: unknown DHCP mode '$dhcp4o6_mode'"
@@ -142,14 +103,6 @@ proto_dhcpv4ov6_setup() {
 
 proto_dhcpv4ov6_teardown() {
 	local interface="$1"
-
-	local mode tunlink
-	json_get_vars mode tunlink
-
-	if [ "$mode" = "lw4o6" ]; then
-		[ -n "$tunlink" ] || rm -f -- "/tmp/firewall-hotplug/${interface}.sh"
-	fi
-
 	proto_kill_command "$interface"
 }
 

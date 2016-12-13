@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=terastream
 PKG_VERSION:=$(PKG_FILE_NAME)
-PKG_RELEASE:=26
+PKG_RELEASE:=27
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(BUILD_VARIANT)
 
@@ -46,11 +46,8 @@ define Package/terastream/install
 	$(INSTALL_BIN) ./files/set_mtu.sh $(1)/usr/sbin/
 
 	$(INSTALL_DIR) $(1)/lib/netifd/proto
-	$(INSTALL_BIN) ./files/dhcp6_terastream.script $(1)/lib/netifd
-	$(INSTALL_BIN) ./files/dhcp6_terastream.sh $(1)/lib/netifd/proto
 	$(INSTALL_BIN) ./files/dhcpv4ov6.script $(1)/lib/netifd/
 	$(INSTALL_BIN) ./files/dhcpv4ov6.sh $(1)/lib/netifd/proto
-	$(INSTALL_BIN) ./files/dslite.sh $(1)/lib/netifd/proto/dslite_terastream.sh
 
 	$(INSTALL_BIN) ./files/lw4o6l.sh $(1)/lib/netifd/proto/
 	$(INSTALL_BIN) ./files/terastream.sh $(1)/lib/netifd/proto/
