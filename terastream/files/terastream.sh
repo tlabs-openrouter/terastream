@@ -115,7 +115,6 @@ proto_terastream_teardown() {
 	local interface="$1"
 	proto_kill_command "$interface"
 	ifdown "${interface}_b4"
-	ifdown "${interface}_d4o6"
 }
 
 add_protocol terastream
