@@ -5,75 +5,6 @@
 . /lib/functions/network.sh
 . /lib/netifd/netifd-proto.sh
 
-_rulefilename() {
-	echo "/tmp/firewall-hotplug/${INTERFACE}.sh"
-}
-
-setup_nat() {
-		local config="${INTERFACE}"
-		local tunnel_intf="$(uci -q get network.${config}.dslite_tunnel)"
-		local port_range="${port_range_min}-${port_range_max}"
-		local to_source="$ip"
-
-		# get device name from logical interface name
-		[ -n "$tunnel_intf" ] && network_get_device tunnel_if $tunnel_intf
-
-		# try again in case of tunnel not setup yet
-		[ -z "$tunnel_intf" ] && {
-			sleep 3
-			network_get_device tunnel_if $tunnel_intf
-		}
-
-		# use same interface if no tunnel interface supplied
-		[ -z "$tunnel_if" ] && tunnel_if="$interface"
-
-		# bail out if something's missing
-		[ -n "$tunnel_if" -a -n "$to_source" ] || exit 0
-
-		# set uci config values for port range
-		uci -q set network.${config}.port_range_min="${port_range_min}"
-		uci -q set network.${config}.port_range_max="${port_range_max}"
-
-		[ "$without_portrange" -eq 0 ] && to_source="${to_source}:${port_range}"
-		
-		if [ "$without_portrange" -eq 0 ]; then 
-			logger -t $config "Restricting ports on iface $INTERFACE to ${port_range}."
-		else
-			logger -t $config "Not restricting ports on iface ${INTERFACE}."
-		fi
-		
-		local mychain="${config}_lw4o6"
-		local rulefile="$(_rulefilename $INTERFACE)"
-		mkdir -p "$(dirname $rulefile)"
-		cat << EOF > "$rulefile"
-#!/bin/sh
-
-target_chain="postrouting_rule"
-
-[ "\$ACTION" = "add" ] && {
-	iptables -w -t nat -N $mychain
-	if [ "$without_portrange" -eq 0 ]; then
-		iptables -w -t nat -I $mychain -o "$tunnel_if" -p tcp -j SNAT --to-source $to_source
-		iptables -w -t nat -I $mychain -o "$tunnel_if" -p udp -j SNAT --to-source $to_source
-		iptables -w -t nat -I $mychain -o "$tunnel_if" -p icmp -j SNAT --to-source $to_source
-	else
-		iptables -w -t nat -I $mychain -o "$tunnel_if" -j SNAT --to-source $to_source
-	fi
-
-	iptables -w -t nat -I \$target_chain -j $mychain
-}
-
-[ "\$ACTION" = "remove" ] && {
-	iptables -w -t nat -D \$target_chain -j $mychain
-	iptables -w -t nat -F $mychain
-	iptables -w -t nat -X $mychain
-}
-	
-EOF
-
-chmod a+x "$rulefile"
-}
-
 portparams_to_ranges() {
 	[ -z "${port_params}" ] && return
 	
@@ -134,6 +65,16 @@ setup_interface () {
 		proto_add_dns_search "$domain"
 	done
 
+	[ -n "${port_params}" ] && {
+		logger -t $config "using port params ${port_params}"
+		portparams_to_ranges
+	}
+
+	without_portrange=0
+
+	[ -z "${port_range_min}" -o "${port_range_min}" = "0" ] && without_portrange="1"
+	[ -z "${port_range_max}" -o "${port_range_max}" = "0" ] && without_portrange="1"
+
 	proto_add_data
 	[ -n "$ZONE" ] && json_add_string zone "$ZONE"
 	if [ "$MODE" = "lw4o6" -a -n "$AFTR_REMOTE" -a "$without_portrange" != "1" ]; then
@@ -143,60 +84,26 @@ setup_interface () {
 
 	proto_send_update "$INTERFACE"
 
-	if [ "$MODE" = "lw4o6" ]; then
-		if [ -n "$AFTR_REMOTE" ]; then
-			json_init
-			json_add_string name "${TUNLINK}_4"
-			json_add_string proto "lw4o6l"
-			json_add_string ipaddr "$ip"
-			json_add_string ip6addr "$AFTR_LOCAL"
-			json_add_string peeraddr "$AFTR_REMOTE"
-			json_add_string tunlink "$TUNLINK"
-
-			if [ "$without_portrange" = "1"  ]; then
-				json_add_int port_range_min "0"
-				json_add_int port_range_max "0"
-			else
-				json_add_int port_range_min "$port_range_min"
-				json_add_int port_range_max "$port_range_max"
-			fi
-
-			json_add_int mtu 1500
-			json_add_boolean delegate "0"
-			json_close_object
-			ubus -S call network add_dynamic "$(json_dump)"
-		else
-			setup_nat
-		fi
-	fi
-
-
-	if [ "$IFACE6RD" != 0 -a -n "$ip6rd" ]; then
-		local v4mask="${ip6rd%% *}"
-		ip6rd="${ip6rd#* }"
-		local ip6rdprefixlen="${ip6rd%% *}"
-		ip6rd="${ip6rd#* }"
-		local ip6rdprefix="${ip6rd%% *}"
-		ip6rd="${ip6rd#* }"
-		local ip6rdbr="${ip6rd%% *}"
-
-		[ -n "$ZONE" ] || ZONE=$(fw3 -q network $INTERFACE)
-		[ -z "$IFACE6RD" -o "$IFACE6RD" = 1 ] && IFACE6RD=${INTERFACE}_6rd
-
+	if [ "$MODE" = "lw4o6" -a -n "$AFTR_REMOTE" ]; then
 		json_init
-		json_add_string name "$IFACE6RD"
-		json_add_string ifname "@$INTERFACE"
-		json_add_string proto "6rd"
-		json_add_string peeraddr "$ip6rdbr"
-		json_add_int ip4prefixlen "$v4mask"
-		json_add_string ip6prefix "$ip6rdprefix"
-		json_add_int ip6prefixlen "$ip6rdprefixlen"
-		json_add_string tunlink "$INTERFACE"
-		[ -n "$IFACE6RD_DELEGATE" ] && json_add_boolean delegate "$IFACE6RD_DELEGATE"
-		[ -n "$ZONE6RD" ] || ZONE6RD=$ZONE
-		[ -n "$ZONE6RD" ] && json_add_string zone "$ZONE6RD"
-		json_close_object
+		json_add_string name "${TUNLINK}_4"
+		json_add_string proto "lw4o6l"
+		json_add_string ipaddr "$ip"
+		json_add_string ip6addr "$AFTR_LOCAL"
+		json_add_string peeraddr "$AFTR_REMOTE"
+		json_add_string tunlink "$TUNLINK"
 
+		if [ "$without_portrange" = "1"  ]; then
+			json_add_int port_range_min "0"
+			json_add_int port_range_max "0"
+		else
+			json_add_int port_range_min "$port_range_min"
+			json_add_int port_range_max "$port_range_max"
+		fi
+
+		json_add_int mtu 1500
+		json_add_boolean delegate "0"
+		json_close_object
 		ubus -S call network add_dynamic "$(json_dump)"
 	fi
 
@@ -212,15 +119,6 @@ deconfig_interface() {
 	proto_send_update "$INTERFACE"
 }
 
-[ -n "${port_params}" ] && {
-	logger -t $config "using port params ${port_params}"
-	portparams_to_ranges
-}
-
-without_portrange=0
-
-[ -z "${port_range_min}" -o "${port_range_min}" = "0" ] && without_portrange="1"
-[ -z "${port_range_max}" -o "${port_range_max}" = "0" ] && without_portrange="1"
 
 case "$1" in
 	deconfig)
