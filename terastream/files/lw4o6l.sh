@@ -110,7 +110,6 @@ proto_lw4o6l_setup() {
 
 proto_lw4o6l_teardown() {
 	local cfg="$1"
-	ifdown "${cfg}"
 }
 
 proto_lw4o6l_init_config() {
