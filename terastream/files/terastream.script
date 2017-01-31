@@ -23,6 +23,8 @@ setup_interface () {
 
 	# TODO: calculate this based on configured MTU
 	local sw_mtu=1500
+	local b4_addr
+	local need_firewall=0
 
 	# Merge RA-DNS
 	for radns in $RA_DNS; do
@@ -199,10 +201,12 @@ setup_interface () {
 		"dhcp4o6")
 			DHCP4_O_DHCP6_SERVERS="$DHCP4_O_DHCP6_SERVERS_88"
 			DHCP4_O_DHCP6_MODE="rfc7341"
+			need_firewall=1
 			;;
 		"99")
 			DHCP4_O_DHCP6_SERVERS="$DHCP4_O_DHCP6_SERVERS_99"
 			DHCP4_O_DHCP6_MODE="terastream"
+			need_firewall=1
 			;;
 
 		"ds-lite")
@@ -211,6 +215,10 @@ setup_interface () {
 			MAPTYPE=""
 			;;
 	esac
+
+	if [ -n "$AFTR" ]; then
+		json_add_string "aftr" "$AFTR"
+	fi
 
 	if [ -n "$DHCP4_O_DHCP6_SERVERS" ]; then
 		local server
@@ -234,12 +242,56 @@ setup_interface () {
 		json_close_array
 	fi
 
+	if [ -n "$OPTION_199" ]; then
+		b4addr=$(ipv6calc --in ifinet6 --out ipv6addr "$OPTION_199")
+		need_firewall=1
+	fi
+
+	if [ "$need_firewall" -eq 1 ]; then
+		json_add_array "firewall"
+
+		  case "$MAPTYPE" in
+			"dhcp4o6"|"99")
+				if [ "$DHCP4_O_DHCP6_MODE" = "terastream" ]; then
+					d4o6_src_port=68
+					d4o6_dest_port=67
+				else
+					d4o6_src_port=547
+					d4o6_dest_port=546
+				fi
+
+				for server in $DHCP4_O_DHCP6_SERVERS; do
+					json_add_object ""
+					  json_add_string type rule
+					  json_add_string proto udp
+					  json_add_string src ${INTERFACE}
+					  json_add_string src_port $d4o6_src_port
+					  json_add_string src_ip $server
+					  json_add_string dest_port $d4o6_dest_port
+					  json_add_string family ipv6
+					  json_add_string target ACCEPT
+					json_close_object
+				done
+				;;
+		  esac
+
+		  json_add_object ""
+		    json_add_string type rule
+		    json_add_string proto tcpudp
+		    json_add_string src ${INTERFACE}
+		    json_add_string ipset "! aftr src"
+		    json_add_string dest_ip $b4addr
+		    json_add_string family ipv6
+		    json_add_string target REJECT
+		  json_close_object
+		json_close_array
+	fi
+
 	proto_close_data
 
 	proto_send_update "$INTERFACE"
 
-	if [ -z "$MAPRULE" -a -n "$OPTION_199" ]; then
-		b4addr=$(ipv6calc --in ifinet6 --out ipv6addr "$OPTION_199")
+	if [ -z "$MAPRULE" -a -n "$b4addr" ]; then
 		json_init
 		json_add_string name "${INTERFACE}_b4"
 		json_add_string ifname "@${INTERFACE}"

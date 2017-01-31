@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=terastream
 PKG_VERSION:=$(PKG_FILE_NAME)
-PKG_RELEASE:=27
+PKG_RELEASE:=28
 PKG_LICENSE:=GPL-2.0
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(BUILD_VARIANT)
@@ -34,6 +34,7 @@ define Package/terastream
   DEPENDS+= +logremote-terastream
   DEPENDS+= +odhcpd
   DEPENDS+= +iptables
+  DEPENDS+= +ipset
 endef
 
 define Package/terastream/description
@@ -55,20 +56,15 @@ define Package/terastream/install
 	$(INSTALL_BIN) ./files/terastream.sh $(1)/lib/netifd/proto/
 	$(INSTALL_BIN) ./files/terastream.script $(1)/lib/netifd/
 
-	$(INSTALL_DIR) $(1)/etc/hotplug.d/firewall
-	$(INSTALL_BIN) ./files/firewall-hotplug-ifrules.sh $(1)/etc/hotplug.d/firewall/20-ifrules
-
 	$(INSTALL_DIR) $(1)/etc/hotplug.d/iface
 	$(INSTALL_BIN) ./files/ntpd.hotplug $(1)/etc/hotplug.d/iface/50-ntpd
+	$(INSTALL_BIN) ./files/aftr.hotplug $(1)/etc/hotplug.d/iface/51-aftr
 
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) ./files/decode_hostname.lua $(1)/usr/bin/decode_hostname
 
 	$(INSTALL_DIR) $(1)/etc/profiles/network
 	$(INSTALL_DATA) ./files/terastream.network $(1)/etc/profiles/network/terastream
-
-	$(INSTALL_DIR) $(1)/etc
-	$(INSTALL_DATA) ./files/firewall.terastream $(1)/etc/firewall.terastream
 
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/init/* $(1)/etc/init.d
