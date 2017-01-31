@@ -155,16 +155,6 @@ setup_terastream() {
     /usr/sbin/set_mtu.sh $mtu_lan "lan"
 
     return 0
-
-    # setup terastream dynamic firewall include
-    grep -s -q '/etc/firewall.terastream' /etc/config/firewall ||
-        {
-            cfg=$(uci add firewall include)
-            [ -n "$cfg" ] && {
-                uci set firewall.$cfg.path="/etc/firewall.terastream"
-                uci set firewall.$cfg.name="filter_input_terastream"
-            }
-        }
 }
 
 setup_iptv() {
@@ -205,6 +195,13 @@ setup_iptv() {
     uci set firewall.@rule[-1].family='ipv6'
     uci set firewall.@rule[-1].target='ACCEPT'
 
+    # Add IPSET for AFTR
+    uci -q add firewall ipset
+    uci set firewall.@ipset[-1].name='aftr'
+    uci set firewall.@ipset[-1].family='ipv6'
+    uci set firewall.@ipset[-1].match='src_ip'
+    uci set firewall.@ipset[-1].storage='hash'
+
     # allow MDL reports
     icmprule="$(uci_find_by_name firewall rule Allow-ICMPv6-Input)"
     [ -n "$icmprule" ] && uci -q add_list firewall.@rule[$icmprule].icmp_type='130/0'
@@ -237,16 +234,6 @@ setup_iptv() {
     uci set ecmh.@ecmh[0].downstream=lan_iptv
 }
 
-add_fw_dhcp6o4() {
-    uci -q add firewall rule
-    uci set firewall.@rule[-1].name='Allow-DHCPv4-over-UDPv6'
-    uci set firewall.@rule[-1].src='wan'
-    uci set firewall.@rule[-1].dest_port='67'
-    uci set firewall.@rule[-1].proto='udp'
-    uci set firewall.@rule[-1].family='ipv6'
-    uci set firewall.@rule[-1].target='ACCEPT'
-}
-
 unsetup_terastream() {
     uci -q delete network.wan_dslite
     uci -q delete network.wan_ds
@@ -257,6 +244,7 @@ unsetup_terastream() {
     uci_delete_by_name firewall forwarding Allow-lan-lan
     uci_delete_by_name firewall rule Allow-MLD-UDP
     uci_delete_by_name firewall rule Allow-DHCPv4-over-UDPv6
+    uci_delete_by_name firewall ipset aftr
 
     # disallow MDL reports
     icmprule="$(uci_find_by_name firewall rule Allow-ICMPv6-Input)"

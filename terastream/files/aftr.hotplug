@@ -1,0 +1,39 @@
+#!/bin/sh
+
+[ "$INTERFACE" = wan ] || exit 0
+[ "$ACTION" = ifupdate -a -z "$IFUPDATE_DATA" ] && exit 0
+
+
+case "$ACTION" in
+"ifup"|"ifupdate")
+	. /usr/share/libubox/jshn.sh
+
+	json_load "$(ifstatus wan)"
+
+	json_select "data"
+	json_get_var aftr aftr
+
+	if [ -n "$aftr" ]; then
+		local remoteip6
+
+		remoteip6=$(resolveip -6 $aftr)
+		if [ -z "$remoteip6" ]; then
+			sleep 3
+			remoteip6=$(resolveip -6 $peeraddr)
+
+			if [ -z "$remoteip6" ]; then
+				exit
+			fi
+		fi
+		peeraddr="${remoteip6%% *}"
+
+		# ensure ip changes don't leave stale entries
+		ipset -q test aftr $peeraddr || ipset -q flush aftr
+		ipset -q -! add aftr $peeraddr
+	fi
+
+	;;
+"ifdown")
+	ipset -q flush aftr
+	;;
+esac
