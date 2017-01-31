@@ -55,9 +55,6 @@ define Package/terastream/install
 	$(INSTALL_BIN) ./files/terastream.sh $(1)/lib/netifd/proto/
 	$(INSTALL_BIN) ./files/terastream.script $(1)/lib/netifd/
 
-	$(INSTALL_DIR) $(1)/etc/hotplug.d/firewall
-	$(INSTALL_BIN) ./files/firewall-hotplug-ifrules.sh $(1)/etc/hotplug.d/firewall/20-ifrules
-
 	$(INSTALL_DIR) $(1)/etc/hotplug.d/iface
 	$(INSTALL_BIN) ./files/ntpd.hotplug $(1)/etc/hotplug.d/iface/50-ntpd
 
@@ -66,9 +63,6 @@ define Package/terastream/install
 
 	$(INSTALL_DIR) $(1)/etc/profiles/network
 	$(INSTALL_DATA) ./files/terastream.network $(1)/etc/profiles/network/terastream
-
-	$(INSTALL_DIR) $(1)/etc
-	$(INSTALL_DATA) ./files/firewall.terastream $(1)/etc/firewall.terastream
 
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/init/* $(1)/etc/init.d
