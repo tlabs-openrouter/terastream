@@ -1,0 +1,473 @@
+diff --git a/networking/udhcp/dhcp4o6.c b/networking/udhcp/dhcp4o6.c
+index a68ab94..506f86e 100644
+--- a/networking/udhcp/dhcp4o6.c
++++ b/networking/udhcp/dhcp4o6.c
+@@ -27,6 +27,7 @@ static void *d6_find_option(uint8_t *option, uint8_t *option_end, unsigned code)
+ static uint8_t *init_d6_packet(struct d6_packet *packet, char type, uint32_t xid);
+ static NOINLINE int d6_recv_raw_packet(struct d6_packet *d6_pkt, int fd);
+ static int d6_raw_socket(int ifindex);
++static void *d6_store_blob(void *dst, const void *src, unsigned len);
+ 
+ /*** Utility functions borrowed from d6_dhcpc.c ***/
+ static void *d6_find_option(uint8_t *option, uint8_t *option_end, unsigned code)
+@@ -263,6 +264,20 @@ static int d6_raw_socket(int ifindex)
+ 	return fd;
+ }
+ 
++static void *d6_copy_option(uint8_t *option, uint8_t *option_end, unsigned code)
++{
++	uint8_t *opt = d6_find_option(option, option_end, code);
++	if (!opt)
++		return opt;
++	return memcpy(xmalloc(opt[3] + 4), opt, opt[3] + 4);
++}
++
++static void *d6_store_blob(void *dst, const void *src, unsigned len)
++{
++	memcpy(dst, src, len);
++	return dst + len;
++}
++
+ 
+ /*** DHCP4o6 utility functions ***/
+ 
+@@ -271,8 +286,8 @@ int dhcp4o6_init (int port, char *cip6, char *sip6)
+ {
+ 	struct in6_addr ip6;
+ 
+-	memset(&dhcp4o6_data.dst_ip, 0, 16);
+-	memset(&dhcp4o6_data.src_ip, 0, 16);
++	memset(&dhcp4o6_data.dst_ip, 0, sizeof(dhcp4o6_data.dst_ip));
++	memset(&dhcp4o6_data.src_ip, 0, sizeof(dhcp4o6_data.src_ip));
+ 
+ 	if (port) {
+ 		dhcp4o6_data.src_port = CLIENT_PORT;
+@@ -325,9 +340,10 @@ int dhcp4o6_open_socket(int mode UNUSED_PARAM)
+ }
+ 
+ static int dhcp4o6_get_dhcpv4_from_dhcpv6 (
+-	struct d6_packet *d6_pkt, struct dhcp_packet *d4_pkt)
++	struct d6_packet *d6_pkt, struct dhcp_packet *d4_pkt, int bytes)
+ {
+ 	uint8_t *d6opt;
++	uint8_t *packet_end = (uint8_t*)&d6_pkt + bytes;
+ 	int opt_len;
+ 
+ 	/* check DHCPv6 packet in d6_pkt */
+@@ -337,7 +353,7 @@ static int dhcp4o6_get_dhcpv4_from_dhcpv6 (
+ 		return -1;
+ 	}
+ 
+-	d6opt = d6_find_option ( d6_pkt->d6_options, (void *) (d6_pkt+1), D6_OPT_DHCPV4_MSG );
++	d6opt = d6_find_option ( d6_pkt->d6_options, packet_end, D6_OPT_DHCPV4_MSG );
+ 	if (!d6opt) {
+ 		log1("D6_OPT_DHCPV4_MSG option not found");
+ 		return -1;
+@@ -353,9 +369,177 @@ static int dhcp4o6_get_dhcpv4_from_dhcpv6 (
+ 	/* extract dhcpv4 packet from dhcpv6 option */
+ 	memcpy(d4_pkt, d6opt + 4, opt_len);
+ 
++	free(dhcp4o6_data.br);
++	dhcp4o6_data.br = d6_copy_option(d6_pkt->d6_options, packet_end, D6_OPT_S46_BR);
++
++	if (dhcp4o6_data.br && dhcp4o6_data.br->len != 16) {
++		free(dhcp4o6_data.br);
++		dhcp4o6_data.br = NULL;
++	}
++
++	free(dhcp4o6_data.saddr_hint);
++	dhcp4o6_data.saddr_hint = d6_copy_option(d6_pkt->d6_options, packet_end, D6_OPT_D4O6_SADDR_HINT);
++	if (dhcp4o6_data.saddr_hint) {
++		uint16_t prefix_len = 255;
++
++		if (dhcp4o6_data.saddr_hint->len > 0)
++			prefix_len = dhcp4o6_data.saddr_hint->data[0];
++
++		if (dhcp4o6_data.saddr_hint->len != (1 + (prefix_len + 7 / 8))) {
++			free(dhcp4o6_data.saddr_hint);
++			dhcp4o6_data.saddr_hint = NULL;
++		}
++	}
++
++	free(dhcp4o6_data.saddr);
++	dhcp4o6_data.saddr = d6_copy_option(d6_pkt->d6_options, packet_end, D6_OPT_D4O6_SADDR);
++	if (dhcp4o6_data.saddr && dhcp4o6_data.br->len != 16) {
++		free(dhcp4o6_data.saddr);
++		dhcp4o6_data.saddr = NULL;
++	}
++
+ 	return opt_len;
+ }
+ 
++/* put all the parameters into the environment */
++static char *option_to_env(struct d6_option *option)
++{
++	char ipv6str[sizeof("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")];
++	uint8_t saddr_hint[16];
++
++	switch (option->code) {
++	case D6_OPT_S46_BR:
++		sprint_nip6(ipv6str, option->data);
++		return xasprintf("s46_br=%s", ipv6str);
++
++	case D6_OPT_D4O6_SADDR_HINT:
++		memset(saddr_hint, 0, sizeof(saddr_hint));
++		memcpy(saddr_hint, option->data + 1, (option->data[0] + 7 / 8));
++
++		sprint_nip6(ipv6str, saddr_hint);
++
++		return xasprintf("dhcp4o6_saddr_hint=%s/%u", ipv6str, (uint8_t)option->data[0]);
++
++	case D6_OPT_D4O6_SADDR:
++		sprint_nip6(ipv6str, option->data);
++		return xasprintf("dhcp4o6_saddr=%s", ipv6str);
++
++	}
++
++	return NULL;
++}
++
++char **dhcp4o6_options_to_env(char **envp)
++{
++	char **curr = envp;
++
++	if (dhcp4o6_data.br) {
++		*curr = option_to_env(dhcp4o6_data.br);
++		putenv(*curr++);
++	}
++
++	if (dhcp4o6_data.saddr_hint) {
++		*curr = option_to_env(dhcp4o6_data.saddr_hint);
++		putenv(*curr++);
++	}
++
++	if (dhcp4o6_data.saddr) {
++		*curr = option_to_env(dhcp4o6_data.saddr);
++		putenv(*curr++);
++	}
++
++	return envp;
++}
++
++int dhcp4o6_count_d6_options(void)
++{
++	int num_options = 0;
++
++	if (dhcp4o6_data.br)
++		num_options++;
++
++	if (dhcp4o6_data.saddr_hint)
++		num_options++;
++
++	if (dhcp4o6_data.saddr)
++		num_options++;
++
++	return num_options;
++}
++
++extern char **fill_envp(struct dhcp_packet *);
++
++static int popen2(FILE **in, FILE **out, char ** argv)
++{
++	struct fd_pair infd, outfd;
++	pid_t pid;
++
++	xpiped_pair(infd);
++	xpiped_pair(outfd);
++
++	fflush_all();
++	pid = xvfork();
++
++	if (pid == 0) {
++		/* Child */
++		/* NB: close _first_, then move fds! */
++		close(infd.wr);
++		close(outfd.rd);
++		xmove_fd(infd.rd, 0);
++		xmove_fd(outfd.wr, 1);
++		BB_EXECVP_or_die(argv);
++	}
++	/* parent */
++	close(infd.rd);
++	close(outfd.wr);
++	*in = xfdopen_for_write(infd.wr);
++	*out = xfdopen_for_read(outfd.rd);
++
++	return pid;
++}
++
++static int dhcp4o6_run_script(struct dhcp_packet *packet4, const char *name,
++			      struct in6_addr *saddr)
++{
++	FILE *in, *out;
++	char **envp, **curr;
++	char *argv[3];
++	pid_t pid;
++	int status, ret = -1;
++
++	envp = fill_envp(packet4);
++
++	/* call script */
++	log1("Executing %s %s", client_config.script, name);
++	argv[0] = (char*) client_config.script;
++	argv[1] = (char*) name;
++	argv[2] = NULL;
++
++	pid = popen2(&in, &out, argv);
++	/* maybe just not open it? */
++	fclose(in);
++	safe_waitpid(pid, &status, 0);
++
++	if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
++		char *saddr_string = xmalloc_fgetline(out);
++
++		if (saddr_string) {
++			ret = inet_pton(AF_INET6, saddr_string, saddr);
++			free(saddr_string);
++		}
++	}
++	fclose(out);
++
++	for (curr = envp; *curr; curr++) {
++		log2(" %s", *curr);
++		bb_unsetenv_and_free(*curr);
++	}
++
++	free(envp);
++
++	return ret;
++}
++
+ int dhcp4o6_recv_packet (struct dhcp_packet *packet4, int fd)
+ {
+ 	struct d6_packet packet6;
+@@ -371,14 +555,14 @@ int dhcp4o6_recv_packet (struct dhcp_packet *packet4, int fd)
+ 	if ( ret < 0 )
+ 		return -1;
+ 
+-	ret = dhcp4o6_get_dhcpv4_from_dhcpv6(&packet6, packet4);
++	ret = dhcp4o6_get_dhcpv4_from_dhcpv6(&packet6, packet4, ret);
+ 	if ( ret < 0 )
+ 		return 0;
+ 	else
+ 		return ret;
+ }
+ 
+-int dhcp4o6_send_packet (struct dhcp_packet *packet4, int bcast )
++int dhcp4o6_send_packet (struct dhcp_packet *packet4, int bcast, char type)
+ {
+ 	struct d6_packet packet6; /* is sizeof(struct d6_packet) large enough? */
+ 	uint d4size, d6size;
+@@ -407,6 +591,46 @@ int dhcp4o6_send_packet (struct dhcp_packet *packet4, int bcast )
+ 
+ 	d6size = 4 + 4 + d4size; /* d6 header + option header + d4 packet */
+ 
++	if (type == DHCPDISCOVER) {
++		d6size += 4; /* S46_BR */
++		d6size += 4; /* SADDR_HINT */
++
++		free(dhcp4o6_data.br);
++		free(dhcp4o6_data.saddr_hint);
++		free(dhcp4o6_data.saddr);
++
++		dhcp4o6_data.br = xzalloc(4);
++		dhcp4o6_data.saddr_hint = xzalloc(4);
++		dhcp4o6_data.saddr = NULL;
++
++		dhcp4o6_data.br->code = D6_OPT_S46_BR;
++		dhcp4o6_data.br->len = 0;
++
++		dhcp4o6_data.saddr_hint->code = D6_OPT_D4O6_SADDR_HINT;
++		dhcp4o6_data.saddr_hint->len = 0;
++
++		opt = d6_store_blob(opt, dhcp4o6_data.br, 4);
++		opt = d6_store_blob(opt, dhcp4o6_data.saddr_hint, 4);
++	} else if (type == DHCPREQUEST) {
++		if (dhcp4o6_data.saddr_hint) {
++			struct in6_addr saddr;
++			int ret;
++
++			ret = dhcp4o6_run_script(packet4, "saddr_hint", &saddr);
++
++			if (!ret) {
++				free(dhcp4o6_data.saddr);
++				dhcp4o6_data.saddr = xzalloc(4 + 16);
++
++				d6size += 20;
++
++				dhcp4o6_data.saddr->code = D6_OPT_D4O6_SADDR;
++				dhcp4o6_data.saddr->len = 16;
++				memcpy(dhcp4o6_data.saddr->data, &saddr, sizeof(saddr));
++			}
++		}
++	}
++
+ 	/* send packet */
+ 	if (dhcp4o6_data.socket_mode == SOCKET_RAW)
+ 		return d6_send_raw_packet(
+diff --git a/networking/udhcp/dhcp4o6.h b/networking/udhcp/dhcp4o6.h
+index e6d6de4..1fd43d0 100644
+--- a/networking/udhcp/dhcp4o6.h
++++ b/networking/udhcp/dhcp4o6.h
+@@ -26,6 +26,15 @@ PUSH_AND_SET_FUNCTION_VISIBILITY_TO_HIDDEN
+ /* DHCPv4o6 option */
+ #define D6_OPT_DHCPV4_MSG          87
+ 
++/* RFC 7598 */
++#define D6_OPT_S46_BR              90
++
++
++/* draft-fsc-softwire-dhcp4o6-saddr-opt-05 */
++
++#define D6_OPT_D4O6_SADDR_HINT     200
++#define D6_OPT_D4O6_SADDR          201
++
+ /* send/recv/listen modes */
+ #define SOCKET_NONE   0
+ #define SOCKET_KERNEL 1
+@@ -45,7 +54,14 @@ struct dhcp4o6_data_t {
+ 	uint16_t dst_port;
+ 
+ 	unsigned socket_mode; /* SOCKET_RAW, SOCKET_KERNEL */
+-};
++
++	struct d6_option *br;
++	struct d6_option *saddr;
++	struct d6_option *saddr_hint;
++
++	char **env_ptr;
++	unsigned env_idx;
++} FIX_ALIASING;
+ 
+ /* dhcp4o6_data is placed at the end of bb_common_bufsiz1 */
+ #define dhcp4o6_data (*(struct dhcp4o6_data_t*)(&bb_common_bufsiz1[COMMON_BUFSIZE - sizeof(struct dhcp4o6_data_t)]))
+@@ -53,9 +69,12 @@ struct dhcp4o6_data_t {
+ 
+ int dhcp4o6_init (int port, char *cip6, char *sip6);
+ int dhcp4o6_open_socket(int mode UNUSED_PARAM);
+-int dhcp4o6_send_packet (struct dhcp_packet *packet4, int bcast );
++int dhcp4o6_send_packet (struct dhcp_packet *packet4, int bcast, char type );
+ int dhcp4o6_recv_packet (struct dhcp_packet *packet, int fd);
+ 
++char **dhcp4o6_options_to_env(char **envp);
++int dhcp4o6_count_d6_options(void);
++
+ POP_SAVED_FUNCTION_VISIBILITY
+ 
+ #endif /* ENABLE_FEATURE_DHCP4o6C */
+diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
+index cdd721b..3dc2413 100644
+--- a/networking/udhcp/dhcpc.c
++++ b/networking/udhcp/dhcpc.c
+@@ -433,7 +433,7 @@ static NOINLINE char *xmalloc_optname_optval(uint8_t *option, const struct dhcp_
+ }
+ 
+ /* put all the parameters into the environment */
+-static char **fill_envp(struct dhcp_packet *packet)
++char **fill_envp(struct dhcp_packet *packet)
+ {
+ 	int envc;
+ 	int i;
+@@ -475,6 +475,9 @@ static char **fill_envp(struct dhcp_packet *packet)
+ 			}
+ 		}
+ 	}
++#ifdef ENABLE_FEATURE_DHCP4o6C
++	envc += dhcp4o6_count_d6_options();
++#endif
+ 	curr = envp = xzalloc(sizeof(envp[0]) * envc);
+ 
+ 	*curr = xasprintf("interface=%s", client_config.interface);
+@@ -561,6 +564,9 @@ static char **fill_envp(struct dhcp_packet *packet)
+ 		i++;
+ 	}
+ 
++#ifdef ENABLE_FEATURE_DHCP4o6C
++	dhcp4o6_options_to_env(curr);
++#endif
+ 	return envp;
+ }
+ 
+@@ -702,11 +708,11 @@ static void add_client_options(struct dhcp_packet *packet)
+  * client reverts to using the IP broadcast address.
+  */
+ 
+-static int raw_bcast_from_client_config_ifindex(struct dhcp_packet *packet)
++static int raw_bcast_from_client_config_ifindex(struct dhcp_packet *packet, char type)
+ {
+ #if ENABLE_FEATURE_DHCP4o6C
+ 	if ( client_config.mode4o6 )
+-		return dhcp4o6_send_packet (packet, 1);
++		return dhcp4o6_send_packet (packet, 1, type);
+ #endif
+ 	return udhcp_send_raw_packet(packet,
+ 		/*src*/ INADDR_ANY, CLIENT_PORT,
+@@ -714,12 +720,12 @@ static int raw_bcast_from_client_config_ifindex(struct dhcp_packet *packet)
+ 		client_config.ifindex);
+ }
+ 
+-static int bcast_or_ucast(struct dhcp_packet *packet, uint32_t ciaddr, uint32_t server)
++static int bcast_or_ucast(struct dhcp_packet *packet, uint32_t ciaddr, uint32_t server, char type)
+ {
+ 	if (server) {
+ #if ENABLE_FEATURE_DHCP4o6C
+ 		if ( client_config.mode4o6 )
+-			return dhcp4o6_send_packet(packet, 0);
++			return dhcp4o6_send_packet(packet, 0, type);
+ 		else
+ #endif
+ 		return udhcp_send_kernel_packet(packet,
+@@ -727,7 +733,7 @@ static int bcast_or_ucast(struct dhcp_packet *packet, uint32_t ciaddr, uint32_t
+ 			server, SERVER_PORT);
+ 	}
+ 
+-	return raw_bcast_from_client_config_ifindex(packet);
++	return raw_bcast_from_client_config_ifindex(packet, type);
+ }
+ 
+ /* Broadcast a DHCP discover packet to the network, with an optionally requested IP */
+@@ -753,7 +759,7 @@ static NOINLINE int send_discover(uint32_t xid, uint32_t requested)
+ 	add_client_options(&packet);
+ 
+ 	bb_info_msg("Sending discover...");
+-	return raw_bcast_from_client_config_ifindex(&packet);
++	return raw_bcast_from_client_config_ifindex(&packet, DHCPDISCOVER);
+ }
+ 
+ /* Broadcast a DHCP request message */
+@@ -797,7 +803,7 @@ static NOINLINE int send_select(uint32_t xid, uint32_t server, uint32_t requeste
+ 
+ 	addr.s_addr = requested;
+ 	bb_info_msg("Sending select for %s...", inet_ntoa(addr));
+-	return raw_bcast_from_client_config_ifindex(&packet);
++	return raw_bcast_from_client_config_ifindex(&packet, DHCPREQUEST);
+ }
+ 
+ /* Unicast or broadcast a DHCP renew message */
+@@ -836,7 +842,7 @@ static NOINLINE int send_renew(uint32_t xid, uint32_t server, uint32_t ciaddr)
+ 	add_client_options(&packet);
+ 
+ 	bb_info_msg("Sending renew...");
+-	return bcast_or_ucast(&packet, ciaddr, server);
++	return bcast_or_ucast(&packet, ciaddr, server, DHCPREQUEST);
+ }
+ 
+ #if ENABLE_FEATURE_UDHCPC_ARPING
+@@ -865,7 +871,7 @@ static NOINLINE int send_decline(/*uint32_t xid,*/ uint32_t server, uint32_t req
+ 	udhcp_add_simple_option(&packet, DHCP_SERVER_ID, server);
+ 
+ 	bb_info_msg("Sending decline...");
+-	return raw_bcast_from_client_config_ifindex(&packet);
++	return raw_bcast_from_client_config_ifindex(&packet, DHCPDECLINE);
+ }
+ #endif
+ 
+@@ -889,7 +895,7 @@ static int send_release(uint32_t server, uint32_t ciaddr)
+ 	 * However, there _are_ people who run "address-less" DHCP servers,
+ 	 * and reportedly ISC dhcp client and Windows allow that.
+ 	 */
+-	return bcast_or_ucast(&packet, ciaddr, server);
++	return bcast_or_ucast(&packet, ciaddr, server, DHCPRELEASE);
+ }
+ 
+ /* Returns -1 on errors that are fatal for the socket, -2 for those that aren't */
