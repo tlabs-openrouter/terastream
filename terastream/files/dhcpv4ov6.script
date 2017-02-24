@@ -144,6 +144,21 @@ setup_interface () {
 	proto_send_update "$INTERFACE"
 
 	if [ "$MODE" = "lw4o6" ]; then
+		[ -n "$s46_br" ] && AFTR_REMOTE=$s46_br
+		[ -n "$dhcp4o6_saddr" ] && AFTR_LOCAL=$dhcp4o6_saddr
+
+		if [ -n "$dhcp4o6_saddr"]; then
+			json_init
+			json_add_string name "${INTERFACE}_sa"
+			json_add_string ifname "@${INTERFACE}"
+			json_add_string proto "static"
+			json_add_array ip6addr
+			json_add_string "" "$dhcp4o6_saddr"
+			json_close_array
+			json_close_object
+			ubus -S call network add_dynamic "$(json_dump)"
+		fi
+
 		if [ -n "$AFTR_REMOTE" ]; then
 			json_init
 			json_add_string name "${TUNLINK}_4"
@@ -211,6 +226,36 @@ deconfig_interface() {
 	proto_init_update "*" 0
 	proto_send_update "$INTERFACE"
 	[ -n "$TUNLINK" ] && ifdown "${TUNLINK}_4"
+	ifdown "${INTERFACE}_sa"
+}
+
+saddr_hint() {
+	local psid psid_len offset saddr_prefix saddr_len
+
+	if [ -z "${ip}" -o -z "${dhcp4o6_saddr_hint}" ]; then
+		return
+	fi
+
+	if [ -n "${port_params}" ]; then
+		offset="$(echo -n ${port_params} | cut -d ',' -f 1)"
+		psid_len="$(echo -n ${port_params} | cut -d ',' -f 2)"
+		psid="$(echo -n ${port_params} | cut -d ',' -f 3)"
+	else
+		offset=0
+		psid_len=0
+		psid=0
+	fi
+
+	if [ -n "${dhcp4o6_saddr_hint}" ]; then
+		saddr_prefix="${dhcp4o6_saddr_hint%/*}"
+		saddr_len="${dhcp4o6_saddr_hint#*/}"
+	fi
+
+	RULE_DATA=$(mapcalc "*" "type=lw4o6,psid=$psid,psidlen=$psid_len,offset=$offset,ipv6prefix=$saddr_prefix,prefix6len=$saddr_len,ipv4prefix=$ip")
+	eval $RULE_DATA
+
+
+	echo "$RULE_1_IPV6ADDR"
 }
 
 [ -n "${port_params}" ] && {
@@ -230,6 +275,8 @@ case "$1" in
 	renew|bound)
 		setup_interface
 	;;
+	saddr_hint)
+		saddr_hint
 esac
 
 # user rules

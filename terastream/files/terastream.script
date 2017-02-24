@@ -148,6 +148,7 @@ setup_interface () {
 	MAPRULE=""
 	S46_TYPES=""
 	FALLBACK=""
+	[ -n "$S46_PRIO" ] || S46_PRIO="dhcp4o6 lw4o6 99 ds-lite map-e map-t"
 
 	if [ -n "$MAPE" -a -f /lib/netifd/proto/map.sh ]; then
 		S46_TYPES="$S46_TYPES map-e"
