@@ -224,6 +224,24 @@ setup_interface () {
 			json_add_string "" "$server"
 		done
 		json_close_array
+
+		# allow DHCPv6 replies through
+		if [ "$DHCP4_O_DHCP6_MODE" == "rfc7341" ]; then
+			json_add_array "firewall"
+			  for server in $DHCP4_O_DHCP6_SERVERS; do
+				json_add_object ""
+				json_add_string type rule
+				json_add_string proto udp
+				json_add_string src ${INTERFACE}
+				json_add_string src_port 547
+				json_add_string src_ip $server
+				json_add_string dest_port 546
+				json_add_string family ipv6
+				json_add_string target ACCEPT
+				json_close_object
+			  done
+			json_close_array
+		fi
 	fi
 
 	if [ -n "$SYSLOG_COLLECTORS" ]; then
