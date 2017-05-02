@@ -376,8 +376,8 @@ Subject: [PATCH 1/9] udhcp: terastream DHCPv4 over DHCPv6
 +	}
 +
 +	//FIXME choose between SOCKET_RAW and SOCKET_KERNEL with additional flag!
-+	dhcp4o6_data.socket_mode = SOCKET_RAW;
-+//	dhcp4o6_data.socket_mode = SOCKET_KERNEL;
++//	dhcp4o6_data.socket_mode = SOCKET_RAW;
++	dhcp4o6_data.socket_mode = SOCKET_KERNEL;
 +
 +	return 0;
 +}
