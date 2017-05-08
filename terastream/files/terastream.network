@@ -22,8 +22,6 @@ multiple() {
 }
 
 setup_terastream() {
-    local wan_noinput
-
     wan_eth="$(get_wanif)"
     [ -z "$wan_eth" ] && {
         logger -s -t terastream "$0: Can't find wan interface name!" \
@@ -148,17 +146,6 @@ setup_terastream() {
 
     add_fw_dhcp6o4
 
-    # add wan isolation zone (for b4 etc)
-    wan_noinput="$(uci_find_by_name firewall zone wan_noinput)"
-
-    if [ -z "$wan_noinput" ]; then
-        uci add firewall zone
-        uci set firewall.@zone[-1].name='wan_noinput'
-        uci set firewall.@zone[-1].input='REJECT'
-        uci set firewall.@zone[-1].output='ACCEPT'
-        uci set firewall.@zone[-1].forward='REJECT'
-    fi
-
     /usr/sbin/set_mtu.sh $mtu_wan "wan"
     /usr/sbin/set_mtu.sh $mtu_lan "lan"
 
@@ -265,7 +252,6 @@ unsetup_terastream() {
     uci_delete_by_name firewall forwarding Allow-lan-lan
     uci_delete_by_name firewall rule Allow-MLD-UDP
     uci_delete_by_name firewall rule Allow-DHCPv4-over-UDPv6
-    uci_delete_by_name firewall zone wan_noinput
 
     # disallow MDL reports
     icmprule="$(uci_find_by_name firewall rule Allow-ICMPv6-Input)"
