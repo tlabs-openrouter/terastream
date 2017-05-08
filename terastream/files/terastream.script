@@ -168,7 +168,7 @@ setup_interface () {
 		S46_TYPES="$S46_TYPES 99"
 		[ -n "$FALLBACK" ] || FALLBACK="99"
 	fi
-	if [ -n "$AFTR_IP" -a -f /lib/netifd/proto/dslite.sh ]; then
+	if [ -n "$AFTR" -a -f /lib/netifd/proto/dslite.sh ]; then
 		S46_TYPES="$S46_TYPES ds-lite"
 		[ -n "$FALLBACK" ] || FALLBACK="ds-lite"
 	fi
