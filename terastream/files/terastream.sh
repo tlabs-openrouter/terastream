@@ -56,6 +56,7 @@ proto_terastream_setup() {
 		[ "$request_pd" -gt 0 ] && append opts "-P 0,_ANY"
 		[ "$request_pd" -gt 1 ] && append opts "-P 0,IPTV"
 		[ "$request_pd" -gt 2 ] && append opts "-P 0,VOIP"
+		append opts "-F"
 	else
 		[ -z "$reqprefix" -o "$reqprefix" = "auto" ] && reqprefix=0
 		[ "$reqprefix" != "no" ] && append opts "-P$reqprefix"
