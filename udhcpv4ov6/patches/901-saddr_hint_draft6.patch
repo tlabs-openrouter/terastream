@@ -1,0 +1,276 @@
+From dca5742ff503d557b969a1931893548197c470af Mon Sep 17 00:00:00 2001
+From: Jonas Gorski <jonas.gorski@gmail.com>
+Date: Mon, 19 Jun 2017 17:30:08 +0200
+Subject: [PATCH] saddr_hint: move saddr to DHCPv4
+
+---
+ networking/udhcp/common.c  |  2 ++
+ networking/udhcp/common.h  |  9 ++++++---
+ networking/udhcp/dhcp4o6.c | 44 ++------------------------------------------
+ networking/udhcp/dhcp4o6.h |  5 +++--
+ networking/udhcp/dhcpc.c   | 24 ++++++++++++++++++++----
+ networking/udhcp/dhcpc.h   |  2 ++
+ 6 files changed, 35 insertions(+), 51 deletions(-)
+
+diff --git a/networking/udhcp/common.c b/networking/udhcp/common.c
+index f01d79339..f01a34a6b 100644
+--- a/networking/udhcp/common.c
++++ b/networking/udhcp/common.c
+@@ -83,6 +83,7 @@ const struct dhcp_optflag dhcp_optflags[] = {
+ 	{ OPTION_IP                               , DHCP_REQUESTED_IP },
+ 	{ OPTION_U8                               , DHCP_MESSAGE_TYPE },
+ 	{ OPTION_U16                              , DHCP_MAX_SIZE },
++	{ OPTION_IP6                              , DHCP_D4O6_SADDR },
+ //looks like these opts will work just fine even without these defs:
+ //	{ OPTION_STRING                           , DHCP_VENDOR },
+ //	/* not really a string: */
+@@ -173,6 +174,7 @@ const struct optionlength_bounds dhcp_option_lengths[] ALIGN1 = {
+ 	/* Just like OPTION_STRING, we use minimum length here */
+ 	[OPTION_STATIC_ROUTES] = { 5, 255 },
+ 	[OPTION_6RD] =    { 22, 252 },  /* ignored by udhcp_str2optset */
++	[OPTION_IP6] =     { 16, 16, },
+ };
+ 
+ 
+diff --git a/networking/udhcp/common.h b/networking/udhcp/common.h
+index b5f5afef0..0b461a835 100644
+--- a/networking/udhcp/common.h
++++ b/networking/udhcp/common.h
+@@ -95,12 +95,13 @@ enum {
+ 	OPTION_DNS_STRING,  /* RFC1035 compressed domain name list */
+ 	OPTION_SIP_SERVERS,
+ #endif
++	OPTION_IP6,
+ 
+-	OPTION_TYPE_MASK = 0x0f,
++	OPTION_TYPE_MASK = 0x1f,
+ 	/* Client requests this option by default */
+-	OPTION_REQ  = 0x10,
++	OPTION_REQ  = 0x40,
+ 	/* There can be a list of 1 or more of these */
+-	OPTION_LIST = 0x20,
++	OPTION_LIST = 0x80,
+ };
+ 
+ /* DHCP option codes (partial list). See RFC 2132 and
+@@ -160,6 +161,8 @@ enum {
+ #define DHCP_WPAD               0xfc /* MSIE's Web Proxy Autodiscovery Protocol */
+ #define DHCP_END                0xff
+ 
++#define DHCP_D4O6_SADDR         0xc9
++
+ /* Offsets in option byte sequence */
+ #define OPT_CODE                0
+ #define OPT_LEN                 1
+diff --git a/networking/udhcp/dhcp4o6.c b/networking/udhcp/dhcp4o6.c
+index 506f86e4c..3adbaab54 100644
+--- a/networking/udhcp/dhcp4o6.c
++++ b/networking/udhcp/dhcp4o6.c
+@@ -391,13 +391,6 @@ static int dhcp4o6_get_dhcpv4_from_dhcpv6 (
+ 		}
+ 	}
+ 
+-	free(dhcp4o6_data.saddr);
+-	dhcp4o6_data.saddr = d6_copy_option(d6_pkt->d6_options, packet_end, D6_OPT_D4O6_SADDR);
+-	if (dhcp4o6_data.saddr && dhcp4o6_data.br->len != 16) {
+-		free(dhcp4o6_data.saddr);
+-		dhcp4o6_data.saddr = NULL;
+-	}
+-
+ 	return opt_len;
+ }
+ 
+@@ -419,11 +412,6 @@ static char *option_to_env(struct d6_option *option)
+ 		sprint_nip6(ipv6str, saddr_hint);
+ 
+ 		return xasprintf("dhcp4o6_saddr_hint=%s/%u", ipv6str, (uint8_t)option->data[0]);
+-
+-	case D6_OPT_D4O6_SADDR:
+-		sprint_nip6(ipv6str, option->data);
+-		return xasprintf("dhcp4o6_saddr=%s", ipv6str);
+-
+ 	}
+ 
+ 	return NULL;
+@@ -443,11 +431,6 @@ char **dhcp4o6_options_to_env(char **envp)
+ 		putenv(*curr++);
+ 	}
+ 
+-	if (dhcp4o6_data.saddr) {
+-		*curr = option_to_env(dhcp4o6_data.saddr);
+-		putenv(*curr++);
+-	}
+-
+ 	return envp;
+ }
+ 
+@@ -461,9 +444,6 @@ int dhcp4o6_count_d6_options(void)
+ 	if (dhcp4o6_data.saddr_hint)
+ 		num_options++;
+ 
+-	if (dhcp4o6_data.saddr)
+-		num_options++;
+-
+ 	return num_options;
+ }
+ 
+@@ -498,8 +478,8 @@ static int popen2(FILE **in, FILE **out, char ** argv)
+ 	return pid;
+ }
+ 
+-static int dhcp4o6_run_script(struct dhcp_packet *packet4, const char *name,
+-			      struct in6_addr *saddr)
++int dhcp4o6_run_script(struct dhcp_packet *packet4, const char *name,
++		       struct in6_addr *saddr)
+ {
+ 	FILE *in, *out;
+ 	char **envp, **curr;
+@@ -597,11 +577,9 @@ int dhcp4o6_send_packet (struct dhcp_packet *packet4, int bcast, char type)
+ 
+ 		free(dhcp4o6_data.br);
+ 		free(dhcp4o6_data.saddr_hint);
+-		free(dhcp4o6_data.saddr);
+ 
+ 		dhcp4o6_data.br = xzalloc(4);
+ 		dhcp4o6_data.saddr_hint = xzalloc(4);
+-		dhcp4o6_data.saddr = NULL;
+ 
+ 		dhcp4o6_data.br->code = D6_OPT_S46_BR;
+ 		dhcp4o6_data.br->len = 0;
+@@ -611,24 +589,6 @@ int dhcp4o6_send_packet (struct dhcp_packet *packet4, int bcast, char type)
+ 
+ 		opt = d6_store_blob(opt, dhcp4o6_data.br, 4);
+ 		opt = d6_store_blob(opt, dhcp4o6_data.saddr_hint, 4);
+-	} else if (type == DHCPREQUEST) {
+-		if (dhcp4o6_data.saddr_hint) {
+-			struct in6_addr saddr;
+-			int ret;
+-
+-			ret = dhcp4o6_run_script(packet4, "saddr_hint", &saddr);
+-
+-			if (!ret) {
+-				free(dhcp4o6_data.saddr);
+-				dhcp4o6_data.saddr = xzalloc(4 + 16);
+-
+-				d6size += 20;
+-
+-				dhcp4o6_data.saddr->code = D6_OPT_D4O6_SADDR;
+-				dhcp4o6_data.saddr->len = 16;
+-				memcpy(dhcp4o6_data.saddr->data, &saddr, sizeof(saddr));
+-			}
+-		}
+ 	}
+ 
+ 	/* send packet */
+diff --git a/networking/udhcp/dhcp4o6.h b/networking/udhcp/dhcp4o6.h
+index 1fd43d05d..8954287ae 100644
+--- a/networking/udhcp/dhcp4o6.h
++++ b/networking/udhcp/dhcp4o6.h
+@@ -33,7 +33,6 @@ PUSH_AND_SET_FUNCTION_VISIBILITY_TO_HIDDEN
+ /* draft-fsc-softwire-dhcp4o6-saddr-opt-05 */
+ 
+ #define D6_OPT_D4O6_SADDR_HINT     200
+-#define D6_OPT_D4O6_SADDR          201
+ 
+ /* send/recv/listen modes */
+ #define SOCKET_NONE   0
+@@ -56,7 +55,6 @@ struct dhcp4o6_data_t {
+ 	unsigned socket_mode; /* SOCKET_RAW, SOCKET_KERNEL */
+ 
+ 	struct d6_option *br;
+-	struct d6_option *saddr;
+ 	struct d6_option *saddr_hint;
+ 
+ 	char **env_ptr;
+@@ -75,6 +73,9 @@ int dhcp4o6_recv_packet (struct dhcp_packet *packet, int fd);
+ char **dhcp4o6_options_to_env(char **envp);
+ int dhcp4o6_count_d6_options(void);
+ 
++int dhcp4o6_run_script(struct dhcp_packet *packet4, const char *name,
++		       struct in6_addr *saddr);
++
+ POP_SAVED_FUNCTION_VISIBILITY
+ 
+ #endif /* ENABLE_FEATURE_DHCP4o6C */
+diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
+index 3dc241376..a92abfbad 100644
+--- a/networking/udhcp/dhcpc.c
++++ b/networking/udhcp/dhcpc.c
+@@ -127,6 +127,7 @@ static const uint8_t len_of_option_as_string[] = {
+ //	[OPTION_S16             ] = sizeof("-32768 "),
+ 	[OPTION_U32             ] = sizeof("4294967295 "),
+ 	[OPTION_S32             ] = sizeof("-2147483684 "),
++	[OPTION_IP6             ] = sizeof("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff "),
+ };
+ 
+ opthash_entry *opthash[OPTHASH_SIZE];
+@@ -475,8 +476,9 @@ char **fill_envp(struct dhcp_packet *packet)
+ 			}
+ 		}
+ 	}
+-#ifdef ENABLE_FEATURE_DHCP4o6C
+-	envc += dhcp4o6_count_d6_options();
++#if ENABLE_FEATURE_DHCP4o6C
++	if (client_config.mode4o6)
++		envc += dhcp4o6_count_d6_options();
+ #endif
+ 	curr = envp = xzalloc(sizeof(envp[0]) * envc);
+ 
+@@ -564,8 +566,9 @@ char **fill_envp(struct dhcp_packet *packet)
+ 		i++;
+ 	}
+ 
+-#ifdef ENABLE_FEATURE_DHCP4o6C
+-	dhcp4o6_options_to_env(curr);
++#if ENABLE_FEATURE_DHCP4o6C
++	if (client_config.mode4o6)
++		dhcp4o6_options_to_env(curr);
+ #endif
+ 	return envp;
+ }
+@@ -795,6 +798,10 @@ static NOINLINE int send_select(uint32_t xid, uint32_t server, uint32_t requeste
+ 
+ 	udhcp_add_simple_option(&packet, DHCP_SERVER_ID, server);
+ 
++#if ENABLE_FEATURE_DHCP4o6C
++	if (client_config.saddr)
++		udhcp_add_binary_option(&packet, client_config.saddr);
++#endif
+ 	/* Add options: maxsize,
+ 	 * optionally: hostname, fqdn, vendorclass,
+ 	 * "param req" option according to -O, and options specified with -x
+@@ -1813,7 +1820,16 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+ 				}
+ 				/*xid = packet.xid; - already is */
+ 				requested_ip = packet.yiaddr;
++#if ENABLE_FEATURE_DHCP4o6C
++				if (client_config.mode4o6) {
++					struct in6_addr saddr;
+ 
++					if (dhcp4o6_run_script(&packet, "saddr", &saddr)) {
++						client_config.saddr = alloc_dhcp_option(DHCP_D4O6_SADDR, "", 16);
++						memcpy(client_config.saddr + OPT_DATA, &saddr, sizeof(saddr));
++					}
++				}
++#endif
+ 				/* enter requesting state */
+ 				state = REQUESTING;
+ 				timeout = 0;
+diff --git a/networking/udhcp/dhcpc.h b/networking/udhcp/dhcpc.h
+index 9067a1b57..663373b65 100644
+--- a/networking/udhcp/dhcpc.h
++++ b/networking/udhcp/dhcpc.h
+@@ -22,8 +22,10 @@ struct client_config_t {
+ 	uint8_t *fqdn;                  /* Optional fully qualified domain name to use */
+ 
+ 	IF_FEATURE_DHCP4o6C(int mode4o6; /* DHCPv4 over DHCPv6 mode */)
++	IF_FEATURE_DHCP4o6C(uint8_t *saddr;)
+ 	IF_FEATURE_V4_PORTPARAMS(struct v4_portparams portparams;)
+ 
++
+ 	uint16_t first_secs;
+ 	uint16_t last_secs;
+ } FIX_ALIASING;
+-- 
+2.11.0
+
