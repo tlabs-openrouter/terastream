@@ -1,4 +1,4 @@
-From dca5742ff503d557b969a1931893548197c470af Mon Sep 17 00:00:00 2001
+From 896377c2f76d5db36f90b00076f7b07ec4915974 Mon Sep 17 00:00:00 2001
 From: Jonas Gorski <jonas.gorski@gmail.com>
 Date: Mon, 19 Jun 2017 17:30:08 +0200
 Subject: [PATCH] saddr_hint: move saddr to DHCPv4
@@ -8,9 +8,9 @@ Subject: [PATCH] saddr_hint: move saddr to DHCPv4
  networking/udhcp/common.h  |  9 ++++++---
  networking/udhcp/dhcp4o6.c | 44 ++------------------------------------------
  networking/udhcp/dhcp4o6.h |  5 +++--
- networking/udhcp/dhcpc.c   | 24 ++++++++++++++++++++----
+ networking/udhcp/dhcpc.c   | 29 +++++++++++++++++++++++++----
  networking/udhcp/dhcpc.h   |  2 ++
- 6 files changed, 35 insertions(+), 51 deletions(-)
+ 6 files changed, 40 insertions(+), 51 deletions(-)
 
 diff --git a/networking/udhcp/common.c b/networking/udhcp/common.c
 index f01d79339..f01a34a6b 100644
@@ -193,7 +193,7 @@ index 1fd43d05d..8954287ae 100644
  
  #endif /* ENABLE_FEATURE_DHCP4o6C */
 diff --git a/networking/udhcp/dhcpc.c b/networking/udhcp/dhcpc.c
-index 3dc241376..a92abfbad 100644
+index 3dc241376..7890a8f8f 100644
 --- a/networking/udhcp/dhcpc.c
 +++ b/networking/udhcp/dhcpc.c
 @@ -127,6 +127,7 @@ static const uint8_t len_of_option_as_string[] = {
@@ -204,7 +204,19 @@ index 3dc241376..a92abfbad 100644
  };
  
  opthash_entry *opthash[OPTHASH_SIZE];
-@@ -475,8 +476,9 @@ char **fill_envp(struct dhcp_packet *packet)
+@@ -413,6 +414,11 @@ static NOINLINE char *xmalloc_optname_optval(uint8_t *option, const struct dhcp_
+ 			}
+ 			return ret;
+ #endif
++#if ENABLE_FEATURE_DHCP4o6C
++		case OPTION_IP6:
++			dest += sprint_nip6(dest, option);
++			break;
++#endif
+ 		} /* switch */
+ 
+ 		/* If we are here, try to format any remaining data
+@@ -475,8 +481,9 @@ char **fill_envp(struct dhcp_packet *packet)
  			}
  		}
  	}
@@ -216,7 +228,7 @@ index 3dc241376..a92abfbad 100644
  #endif
  	curr = envp = xzalloc(sizeof(envp[0]) * envc);
  
-@@ -564,8 +566,9 @@ char **fill_envp(struct dhcp_packet *packet)
+@@ -564,8 +571,9 @@ char **fill_envp(struct dhcp_packet *packet)
  		i++;
  	}
  
@@ -228,7 +240,7 @@ index 3dc241376..a92abfbad 100644
  #endif
  	return envp;
  }
-@@ -795,6 +798,10 @@ static NOINLINE int send_select(uint32_t xid, uint32_t server, uint32_t requeste
+@@ -795,6 +803,10 @@ static NOINLINE int send_select(uint32_t xid, uint32_t server, uint32_t requeste
  
  	udhcp_add_simple_option(&packet, DHCP_SERVER_ID, server);
  
@@ -239,7 +251,7 @@ index 3dc241376..a92abfbad 100644
  	/* Add options: maxsize,
  	 * optionally: hostname, fqdn, vendorclass,
  	 * "param req" option according to -O, and options specified with -x
-@@ -1813,7 +1820,16 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
+@@ -1813,7 +1825,16 @@ int udhcpc_main(int argc UNUSED_PARAM, char **argv)
  				}
  				/*xid = packet.xid; - already is */
  				requested_ip = packet.yiaddr;
