@@ -9,14 +9,14 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=odhcp6c-terastream
-PKG_VERSION:=2016-10-25.1
+PKG_VERSION:=2017-01-30
 PKG_RELEASE=$(PKG_SOURCE_VERSION)
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
 PKG_SOURCE_URL:=git@github.com:tlabs-openrouter/odhcp6c.git
 PKG_SOURCE_PROTO:=git
-PKG_SOURCE_VERSION:=055b4b17989375bed78211e553082c475163032d
+PKG_SOURCE_VERSION:=379a29067112dce51b3425c23f39262d016e3407
 PKG_MAINTAINER:=Kaspar Schleiser <kaspar@schleiser.de>
 PKG_LICENSE:=GPL-2.0
 
@@ -39,7 +39,7 @@ define Package/odhcp6c-terastream
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Embedded DHCPv6-client for OpenWrt, Terastream fork
-  DEPENDS:=@IPV6
+  DEPENDS:=@IPV6 +libubox
 endef
 
 define Package/odhcp6c-terastream/config
