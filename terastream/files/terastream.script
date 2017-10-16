@@ -253,10 +253,8 @@ setup_interface () {
 		  case "$MAPTYPE" in
 			"dhcp4o6"|"99")
 				if [ "$DHCP4_O_DHCP6_MODE" = "terastream" ]; then
-					d4o6_src_port=68
 					d4o6_dest_port=67
 				else
-					d4o6_src_port=547
 					d4o6_dest_port=546
 				fi
 
@@ -265,7 +263,6 @@ setup_interface () {
 					  json_add_string type rule
 					  json_add_string proto udp
 					  json_add_string src ${INTERFACE}
-					  json_add_string src_port $d4o6_src_port
 					  json_add_string src_ip $server
 					  json_add_string dest_port $d4o6_dest_port
 					  json_add_string family ipv6
