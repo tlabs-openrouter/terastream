@@ -299,6 +299,7 @@ setup_interface () {
 		json_add_string proto "static"
 		json_add_array ip6addr
 		json_add_string "" "$b4addr"
+		json_add_boolean "ip6deprecated" "1"
 		json_close_array
 		json_close_object
 		ubus -S call network add_dynamic "$(json_dump)"
