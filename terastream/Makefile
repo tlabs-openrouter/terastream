@@ -32,7 +32,7 @@ define Package/terastream
   DEPENDS+= +udhcpv4ov6
   DEPENDS+= +ds-lite +map
   DEPENDS+= +logremote-terastream
-  DEPENDS+= +odhcpd
+  DEPENDS+= +odhcpd-ipv6only
   DEPENDS+= +iptables
   DEPENDS+= +ipset
 endef
