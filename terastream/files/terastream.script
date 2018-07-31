@@ -315,7 +315,6 @@ setup_interface () {
 		json_add_string tunlink "$INTERFACE"
 		json_add_int mtu "$sw_mtu"
 		json_add_string proto dhcpv4ov6
-		json_add_string mode lw4o6
 		json_add_string dhcp_servers "$DHCP4_O_DHCP6_SERVERS"
 		if [ -n "$OPTION_1" ]; then
 			json_add_string clientid "ff00000000${OPTION_1}"

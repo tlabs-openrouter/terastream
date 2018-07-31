@@ -77,7 +77,7 @@ setup_interface () {
 
 	proto_add_data
 	[ -n "$ZONE" ] && json_add_string zone "$ZONE"
-	if [ "$MODE" = "lw4o6" -a -n "$AFTR_REMOTE" -a "$without_portrange" != "1" ]; then
+	if [ -n "$AFTR_REMOTE" -a "$without_portrange" != "1" ]; then
 			json_add_string portrange "$port_range_min-$port_range_max"
 	fi
 	proto_close_data

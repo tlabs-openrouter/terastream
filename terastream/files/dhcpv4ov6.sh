@@ -17,7 +17,6 @@ proto_dhcpv4ov6_init_config() {
 	proto_config_add_boolean "broadcast"
 	proto_config_add_string "reqopts"
 	proto_config_add_boolean "nodefaultopts"
-	proto_config_add_string "mode"
 	proto_config_add_boolean "ignoredns"
 	proto_config_add_string "iface6rd"
 
@@ -33,8 +32,8 @@ proto_dhcpv4ov6_setup() {
 
 	proto_add_host_dependency "$config" ::
 
-	local ipaddr hostname clientid vendorid broadcast reqopts nodefaultopts mode ignoredns iface6rd aftr_local aftr_remote dhcp_servers tunlink
-	json_get_vars ipaddr hostname clientid vendorid broadcast reqopts nodefaultopts mode ignoredns iface6rd aftr_local aftr_remote dhcp_servers tunlink
+	local ipaddr hostname clientid vendorid broadcast reqopts nodefaultopts ignoredns iface6rd aftr_local aftr_remote dhcp_servers tunlink
+	json_get_vars ipaddr hostname clientid vendorid broadcast reqopts nodefaultopts ignoredns iface6rd aftr_local aftr_remote dhcp_servers tunlink
 
 	local opt dhcpopts
 	for opt in $reqopts; do
@@ -72,7 +71,6 @@ proto_dhcpv4ov6_setup() {
 
 	proto_export "INTERFACE=$config"
 	proto_export "ignoredns=$ignoredns"
-	proto_export "MODE=$mode"
 	proto_export "TUNLINK=$tunlink"
 
 	if [ -n "$dhcp_servers" ]; then
