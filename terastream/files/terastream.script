@@ -162,13 +162,9 @@ setup_interface () {
 		S46_TYPES="$S46_TYPES lw4o6"
 		[ -n "$FALLBACK" ] || FALLBACK="lw4o6"
 	fi
-	if [ -n "$DHCP4_O_DHCP6_SERVERS_88" ]; then
+	if [ -n "$DHCP4_O_DHCP6_SERVERS" ]; then
 		S46_TYPES="$S46_TYPES dhcp4o6"
 		[ -n "$FALLBACK" ] || FALLBACK="dhcp4o6"
-	fi
-	if [ -n "$DHCP4_O_DHCP6_SERVERS_99" ]; then
-		S46_TYPES="$S46_TYPES 99"
-		[ -n "$FALLBACK" ] || FALLBACK="99"
 	fi
 	if [ -n "$AFTR" -a -f /lib/netifd/proto/dslite.sh ]; then
 		S46_TYPES="$S46_TYPES ds-lite"
@@ -199,16 +195,9 @@ setup_interface () {
 			MAPRULE="$LW4O6"
 			;;
 		"dhcp4o6")
-			DHCP4_O_DHCP6_SERVERS="$DHCP4_O_DHCP6_SERVERS_88"
 			DHCP4_O_DHCP6_MODE="rfc7341"
 			need_firewall=1
 			;;
-		"99")
-			DHCP4_O_DHCP6_SERVERS="$DHCP4_O_DHCP6_SERVERS_99"
-			DHCP4_O_DHCP6_MODE="terastream"
-			need_firewall=1
-			;;
-
 		"ds-lite")
 			;;
 		*)
@@ -222,8 +211,6 @@ setup_interface () {
 
 	if [ -n "$DHCP4_O_DHCP6_SERVERS" ]; then
 		local server
-
-		json_add_string "dhcp4o6mode" "$DHCP4_O_DHCP6_MODE"
 
 		json_add_array dhcp4o6servers
 		for server in $DHCP4_O_DHCP6_SERVERS; do
@@ -329,7 +316,6 @@ setup_interface () {
 		json_add_int mtu "$sw_mtu"
 		json_add_string proto dhcpv4ov6
 		json_add_string mode lw4o6
-		json_add_string dhcp_mode "$DHCP4_O_DHCP6_MODE"
 		json_add_string dhcp_servers "$DHCP4_O_DHCP6_SERVERS"
 		if [ -n "$OPTION_1" ]; then
 			json_add_string clientid "ff00000000${OPTION_1}"

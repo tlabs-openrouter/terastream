@@ -9,14 +9,14 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=odhcp6c-terastream
-PKG_VERSION:=2017-01-30
+PKG_VERSION:=2018-07-14
 PKG_RELEASE=$(PKG_SOURCE_VERSION)
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
 PKG_SOURCE_URL:=git@github.com:tlabs-openrouter/odhcp6c.git
 PKG_SOURCE_PROTO:=git
-PKG_SOURCE_VERSION:=379a29067112dce51b3425c23f39262d016e3407
+PKG_SOURCE_VERSION:=d0980ee58b41a83d4034dc6810c2fd211b37e56c
 PKG_MAINTAINER:=Kaspar Schleiser <kaspar@schleiser.de>
 PKG_LICENSE:=GPL-2.0
 
@@ -29,10 +29,6 @@ endif
 
 ifneq ($(CONFIG_PACKAGE_odhcp6c-terastream_ext_cer_id),0)
   CMAKE_OPTIONS += -DEXT_CER_ID=$(CONFIG_PACKAGE_odhcp6c-terastream_ext_cer_id)
-endif
-
-ifneq ($(CONFIG_PACKAGE_odhcp6c-terastream_s46_priority),0)
-  CMAKE_OPTIONS += -DEXT_S46_PRIORITY=$(CONFIG_PACKAGE_odhcp6c-terastream_ext_s46_priority)
 endif
 
 define Package/odhcp6c-terastream
@@ -50,11 +46,6 @@ define Package/odhcp6c-terastream/config
 
   config PACKAGE_odhcp6c-terastream_ext_cer_id
     int "CER-ID Extension ID (0 = disabled)"
-    depends on PACKAGE_odhcp6c-terastream
-    default 0
-
-  config PACKAGE_odhcp6c-terastream_ext_s46_priority
-    int "S46 Priority Extension ID (0 = disabled)"
     depends on PACKAGE_odhcp6c-terastream
     default 0
 endef

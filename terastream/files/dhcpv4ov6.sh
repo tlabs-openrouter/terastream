@@ -23,7 +23,6 @@ proto_dhcpv4ov6_init_config() {
 
 	proto_config_add_string "aftr_local"
 	proto_config_add_string "aftr_remote"
-	proto_config_add_string "dhcp_mode"
 	proto_config_add_string "dhcp_servers"
 }
 
@@ -34,8 +33,8 @@ proto_dhcpv4ov6_setup() {
 
 	proto_add_host_dependency "$config" ::
 
-	local ipaddr hostname clientid vendorid broadcast reqopts nodefaultopts mode ignoredns iface6rd aftr_local aftr_remote dhcp_mode dhcp_servers tunlink
-	json_get_vars ipaddr hostname clientid vendorid broadcast reqopts nodefaultopts mode ignoredns iface6rd aftr_local aftr_remote dhcp_mode dhcp_servers tunlink
+	local ipaddr hostname clientid vendorid broadcast reqopts nodefaultopts mode ignoredns iface6rd aftr_local aftr_remote dhcp_servers tunlink
+	json_get_vars ipaddr hostname clientid vendorid broadcast reqopts nodefaultopts mode ignoredns iface6rd aftr_local aftr_remote dhcp_servers tunlink
 
 	local opt dhcpopts
 	for opt in $reqopts; do
@@ -71,16 +70,6 @@ proto_dhcpv4ov6_setup() {
 
 	[ -n "$iface6rd" ] && proto_export "IFACE6RD=$iface6rd"
 
-	local DHCP_CLIENT
-	if [ "$dhcp_mode" = "rfc7341" ]; then
-		DHCP_CLIENT="udhcpv4ov6"
-	elif [ "$dhcp_mode" = "terastream" ]; then
-		DHCP_CLIENT="udhcpc"
-	else
-		logger -t $config "ERROR: unknown DHCP mode '$dhcp4o6_mode'"
-		exit 1
-	fi
-
 	proto_export "INTERFACE=$config"
 	proto_export "ignoredns=$ignoredns"
 	proto_export "MODE=$mode"
@@ -91,7 +80,7 @@ proto_dhcpv4ov6_setup() {
 		proto_export "AFTR_REMOTE=$aftr_remote"
 	fi
 
-	proto_run_command "$config" $DHCP_CLIENT \
+	proto_run_command "$config" udhcpv4ov6 \
 		-p /var/run/$DHCP_CLIENT-$iface.pid \
 		-s /lib/netifd/dhcpv4ov6.script \
 		-f -i "$iface" \
