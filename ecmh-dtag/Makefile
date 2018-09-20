@@ -13,7 +13,7 @@ PKG_RELEASE=1
 
 PKG_REV:=2c00efcac013a8227d031b367dd8ef4d5b8867bc
 PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL:=git@github.com:tlabs-openrouter/ecmh-dtag.git
+PKG_SOURCE_URL:=https://github.com/tlabs-openrouter/ecmh-dtag.git
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
 PKG_SOURCE_VERSION:=$(PKG_REV)
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
