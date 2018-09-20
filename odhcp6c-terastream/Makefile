@@ -14,7 +14,7 @@ PKG_RELEASE=$(PKG_SOURCE_VERSION)
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE_URL:=git@github.com:tlabs-openrouter/odhcp6c.git
+PKG_SOURCE_URL:=https://github.com/tlabs-openrouter/odhcp6c.git
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_VERSION:=d0980ee58b41a83d4034dc6810c2fd211b37e56c
 PKG_MAINTAINER:=Kaspar Schleiser <kaspar@schleiser.de>
